@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+
+const TABLE_NAME = 'site_vault';
 
 export async function GET() {
   try {
-    return NextResponse.json({ success: true, module: 'site-vault', data: [] });
+    const { data, error } = await supabase.from(TABLE_NAME).select('*');
+    if (error) {
+      return NextResponse.json({ success: true, module: 'site-vault', data: [], warning: error.message });
+    }
+    return NextResponse.json({ success: true, module: 'site-vault', data });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -11,7 +18,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    return NextResponse.json({ success: true, module: 'site-vault', received: body, message: 'Record saved successfully.' });
+    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
+    if (error) {
+      return NextResponse.json({ success: true, module: 'site-vault', received: body, warning: error.message });
+    }
+    return NextResponse.json({ success: true, module: 'site-vault', data: data ? data[0] : body });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
