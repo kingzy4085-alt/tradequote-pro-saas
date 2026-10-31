@@ -1,29 +1,29 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const TABLE_NAME = 'vendors';
-
 export async function GET() {
   try {
-    const { data, error } = await supabase.from(TABLE_NAME).select('*');
-    if (error) {
-      return NextResponse.json({ success: true, module: 'vendors', data: [], warning: error.message });
+    if (!supabase) {
+      return NextResponse.json({ success: true, data: [] }, { status: 200 });
     }
-    return NextResponse.json({ success: true, module: 'vendors', data });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    const { data, error } = await supabase.from('vendors').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return NextResponse.json({ success: true, data: data || [] }, { status: 200 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message || 'Failed to fetch vendors' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, module: 'vendors', received: body, warning: error.message });
+    const body = await request.json().catch(() => ({}));
+    if (!supabase) {
+      return NextResponse.json({ success: true, data: body }, { status: 200 });
     }
-    return NextResponse.json({ success: true, module: 'vendors', data: data ? data[0] : body });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    const { data, error } = await supabase.from('vendors').insert([body]).select();
+    if (error) throw error;
+    return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message || 'Failed to create vendor' }, { status: 500 });
   }
 }
