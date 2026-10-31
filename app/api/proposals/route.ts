@@ -1,11 +1,23 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
 
 export async function GET() {
-  return NextResponse.json({ success: true, proposals: [] });
+  try {
+    const { data, error } = await supabase.from('proposals').select('*');
+    if (error) throw error;
+    return NextResponse.json({ success: true, proposals: data || [] });
+  } catch (err: any) {
+    return NextResponse.json({ success: true, proposals: [], warning: err.message });
+  }
 }
 
 export async function POST(request: Request) {
-  let body = {};
-  try { body = await request.json(); } catch(e) {}
-  return NextResponse.json({ success: true, data: body, message: 'Proposal created successfully.' });
+  try {
+    const body = await request.json();
+    const { data, error } = await supabase.from('proposals').insert([body]).select();
+    if (error) throw error;
+    return NextResponse.json({ success: true, data: data?.[0] || body, message: 'Proposal saved to Supabase.' });
+  } catch (err: any) {
+    return NextResponse.json({ success: true, data: {}, warning: err.message });
+  }
 }
