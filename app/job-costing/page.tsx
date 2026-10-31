@@ -1,166 +1,257 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from 'react';
+
+interface JobCost {
+  id: string;
+  projectName: string;
+  clientName: string;
+  contractValue: number;
+  laborCost: number;
+  materialCost: number;
+  equipmentCost: number;
+  created_at: string;
+}
 
 export default function JobCostingPage() {
-  const [projectName, setProjectName] = useState("Cargill Canola Plant Shutdown");
-  const [budgetedLabor, setBudgetedLabor] = useState(15000.00);
-  const [actualLabor, setActualLabor] = useState(13800.00);
-  const [budgetedMaterials, setBudgetedMaterials] = useState(8500.00);
-  const [actualMaterials, setActualMaterials] = useState(8900.00);
-  const [budgetedEquipment, setBudgetedEquipment] = useState(4500.00);
-  const [actualEquipment, setActualEquipment] = useState(4200.00);
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [jobs, setJobs] = useState<JobCost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [projectName, setProjectName] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [contractValue, setContractValue] = useState('50000');
+  const [laborCost, setLaborCost] = useState('18000');
+  const [materialCost, setMaterialCost] = useState('12000');
+  const [equipmentCost, setEquipmentCost] = useState('5000');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const fetchJobs = async () => {
     try {
-      const res = await fetch("/api/job-costing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectName, budgetedLabor, actualLabor, budgetedMaterials, actualMaterials, budgetedEquipment, actualEquipment })
-      });
-      const data = await res.json();
-      setResult(data);
+      const res = await fetch('/api/job-costing');
+      const json = await res.json();
+      if (json.success) {
+        setJobs(json.data || []);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch job costs', err);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/job-costing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          projectName, 
+          clientName, 
+          contractValue: Number(contractValue),
+          laborCost: Number(laborCost),
+          materialCost: Number(materialCost),
+          equipmentCost: Number(equipmentCost)
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowModal(false);
+        setProjectName('');
+        setClientName('');
+        setContractValue('50000');
+        setLaborCost('18000');
+        setMaterialCost('12000');
+        setEquipmentCost('5000');
+        fetchJobs();
+      }
+    } catch (err) {
+      console.error('Failed to create job cost record', err);
+    }
+  };
+
+  const filteredJobs = jobs.filter(job => 
+    job.projectName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    job.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">TradeQuote PRO — Job Costing & Budget Tracking</h1>
-        <p className="text-slate-400 mb-8">Compare estimated budgets against actual job costs, labor hours, and equipment expenditures.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Project Name</label>
-            <input 
-              type="text" 
-              value={projectName} 
-              onChange={(e) => setProjectName(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
-              required 
-            />
+            <h1 className="text-3xl font-bold tracking-tight text-white">Job Costing & Profit Margins</h1>
+            <p className="text-slate-400 mt-1">Track live labor, material, and equipment expenses against contract values.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-            <div>
-              <h3 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-4">Labor Costs</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Budgeted Labor ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={budgetedLabor} 
-                    onChange={(e) => setBudgetedLabor(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Actual Labor ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={actualLabor} 
-                    onChange={(e) => setActualLabor(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-4">Material Costs</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Budgeted Materials ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={budgetedMaterials} 
-                    onChange={(e) => setBudgetedMaterials(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Actual Materials ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={actualMaterials} 
-                    onChange={(e) => setActualMaterials(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900/60 p-6 rounded-2xl border border-slate-800">
-            <div>
-              <h3 className="text-sm font-bold uppercase text-slate-400 tracking-wider mb-4">Equipment Rental Costs</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Budgeted Equipment ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={budgetedEquipment} 
-                    onChange={(e) => setBudgetedEquipment(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Actual Equipment ($)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={actualEquipment} 
-                    onChange={(e) => setActualEquipment(Number(e.target.value))}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
-                    required 
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col justify-end">
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-400">
-                <span className="block text-slate-200 font-semibold mb-1">Cost Analysis Note:</span>
-                Totals are automatically aggregated across labor, materials, and equipment to compute profit margins and real-time project variance.
-              </div>
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-xl transition"
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2.5 rounded-lg shadow transition-colors flex items-center gap-2"
           >
-            {loading ? "Calculating Job Costing..." : "Calculate Job Costing & Budget Variance"}
+            + New Job Costing Record
           </button>
-        </form>
+        </div>
 
-        {result && (
-          <div className="mt-8 bg-slate-900 border border-emerald-500/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-emerald-400 mb-2">Job Costing Analysis Computed Successfully!</h3>
-            <pre className="bg-slate-950 p-4 rounded text-xs text-slate-300 overflow-x-auto font-mono">
-              {JSON.stringify(result, null, 2)}
-            </pre>
+        {/* Search Bar */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search projects or clients..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full md:w-96 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        {/* Data Table */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
+                  <th className="p-4">Project Name</th>
+                  <th className="p-4">Client</th>
+                  <th className="p-4">Contract Value</th>
+                  <th className="p-4">Total Expenses</th>
+                  <th className="p-4">Net Profit</th>
+                  <th className="p-4">Margin (%)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500">Loading job costing data...</td>
+                  </tr>
+                ) : filteredJobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500">No active job costing records found. Add one above!</td>
+                  </tr>
+                ) : (
+                  filteredJobs.map((job) => {
+                    const contract = Number(job.contractValue || 0);
+                    const labor = Number(job.laborCost || 0);
+                    const material = Number(job.materialCost || 0);
+                    const equipment = Number(job.equipmentCost || 0);
+                    const totalExpenses = labor + material + equipment;
+                    const netProfit = contract - totalExpenses;
+                    const margin = contract > 0 ? ((netProfit / contract) * 100).toFixed(1) : '0';
+                    const isHealthy = Number(margin) >= 20;
+
+                    return (
+                      <tr key={job.id || Math.random()} className="hover:bg-slate-850/50 transition-colors">
+                        <td className="p-4 font-medium text-white">{job.projectName || 'Untitled Project'}</td>
+                        <td className="p-4 text-slate-300">{job.clientName || 'N/A'}</td>
+                        <td className="p-4 text-slate-200">${contract.toLocaleString()}</td>
+                        <td className="p-4 text-amber-400">${totalExpenses.toLocaleString()}</td>
+                        <td className="p-4 text-emerald-400 font-semibold">${netProfit.toLocaleString()}</td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${isHealthy ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                            {margin}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Create Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold text-white mb-4">New Job Costing Record</h2>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Project Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="e.g. Canola Plant Shutdown Phase 2"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Client Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                    placeholder="e.g. Cargill Ltd."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Contract Value ($)</label>
+                  <input
+                    type="number"
+                    required
+                    value={contractValue}
+                    onChange={(e) => setContractValue(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Labor Cost ($)</label>
+                    <input
+                      type="number"
+                      required
+                      value={laborCost}
+                      onChange={(e) => setLaborCost(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Material ($)</label>
+                    <input
+                      type="number"
+                      required
+                      value={materialCost}
+                      onChange={(e) => setMaterialCost(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Equipment ($)</label>
+                    <input
+                      type="number"
+                      required
+                      value={equipmentCost}
+                      onChange={(e) => setEquipmentCost(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-amber-500 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2 rounded-lg transition-colors"
+                  >
+                    Save Job Record
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
