@@ -42,3 +42,14 @@ CREATE TABLE site_logs (
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE proposals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    project_name VARCHAR(255) NOT NULL,
+    client_name VARCHAR(255),
+    amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'draft',
+    scope_details TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
