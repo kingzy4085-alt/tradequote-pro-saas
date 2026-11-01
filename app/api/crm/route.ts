@@ -1,29 +1,23 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase'
+import { authorize } from '@/lib/auth/authorize'
 
-const TABLE_NAME = 'crm';
+export async function GET(){
 
-export async function GET() {
-  try {
-    const { data, error } = await supabase.from(TABLE_NAME).select('*');
-    if (error) {
-      return NextResponse.json({ success: true, module: 'crm', data: [], warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'crm', data });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
-}
+ const ctx =
+   await authorize('electrician')
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, module: 'crm', received: body, warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'crm', data: data ? data[0] : body });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+ const { data,error }
+ =
+ await supabase!
+ .from('crm')
+ .select('*')
+ .eq('company_id',ctx.companyId)
+
+ if(error)
+  return Response.json(error,{
+   status:500
+  })
+
+ return Response.json(data)
+
 }

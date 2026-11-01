@@ -1,16 +1,32 @@
-import { Permissions } from './permissions'
+const RoleHierarchy = {
 
-export function hasAccess(
- role:string,
- feature:string
+ owner:5,
+
+ admin:4,
+
+ project_manager:3,
+
+ foreman:2,
+
+ electrician:1,
+
+ client:0
+
+}
+
+export function requireRole(
+ userRole:string,
+ required:string
 ){
 
- const allowed =
-   (Permissions as any)[role] ?? []
+ if(
+  RoleHierarchy[userRole]
+  <
+  RoleHierarchy[required]
+ ){
 
- if(allowed.includes('*'))
-   return true
+  throw new Error('Forbidden')
 
- return allowed.includes(feature)
+ }
 
 }
