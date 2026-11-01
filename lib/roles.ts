@@ -1,6 +1,5 @@
 export const Roles = {
  OWNER: 'owner',
- ADMIN: 'admin',
  PM: 'project_manager',
  FOREMAN: 'foreman',
  ELECTRICIAN: 'electrician',
