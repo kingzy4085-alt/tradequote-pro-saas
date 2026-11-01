@@ -1,8 +1,10 @@
+import { supabase } from '@/lib/supabase'
+
 export async function GET() {
 
  return Response.json({
-  metric: 'revenue',
-  value: 0
+   metric:'revenue',
+   status:'online'
  })
 
 }
