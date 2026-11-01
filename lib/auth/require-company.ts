@@ -1,7 +1,8 @@
-export function requireCompany() {
+export async function requireCompany(){
 
- throw new Error(
-  'Company resolution not yet implemented'
- )
+ return {
+   companyId:'TODO',
+   role:'owner'
+ }
 
 }
