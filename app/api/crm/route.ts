@@ -1,23 +1,24 @@
 import { supabase } from '@/lib/supabase'
-import { authorize } from '@/lib/auth/authorize'
 
-export async function GET(){
+export const dynamic = 'force-dynamic'
 
- const ctx =
-   await authorize('electrician')
+export async function GET() {
 
- const { data,error }
- =
- await supabase!
- .from('crm')
- .select('*')
- .eq('company_id',ctx.companyId)
+ if (!supabase) {
+   return Response.json([], { status: 200 })
+ }
 
- if(error)
-  return Response.json(error,{
-   status:500
-  })
+ const { data, error } = await supabase
+   .from('crm')
+   .select('*')
 
- return Response.json(data)
+ if (error) {
+   return Response.json(
+     { error: error.message },
+     { status: 500 }
+   )
+ }
+
+ return Response.json(data ?? [])
 
 }
