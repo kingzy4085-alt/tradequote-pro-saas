@@ -1,144 +1,142 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from 'react';
 
-export default function SafetyLogsPage() {
-  const [projectName, setProjectName] = useState("Cargill Canola Plant Shutdown");
-  const [incidentType, setIncidentType] = useState("Near Miss");
-  const [severity, setSeverity] = useState("Low / Controlled");
-  const [location, setLocation] = useState("Main Electrical Switchgear Bay B");
-  const [description, setDescription] = useState("Temporary cable run draped near overhead walkway without adequate clearance flagging.");
-  const [correctiveAction, setCorrectiveAction] = useState("Immediately installed high-visibility safety delineation and hung cables on overhead swing arms.");
-  const [reportedBy, setReportedBy] = useState("Kyle Ingalls (4th-Year Electrical Apprentice)");
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+interface RecordItem {
+  id: string;
+  title?: string;
+  name?: string;
+  status?: string;
+  created_at?: string;
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+export default function Page() {
+  const [items, setItems] = useState<RecordItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [recordName, setRecordName] = useState('');
+  const [status, setStatus] = useState('Active');
+
+  const fetchItems = async () => {
     try {
-      const res = await fetch("/api/safety-logs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectName, incidentType, severity, location, description, correctiveAction, reportedBy })
-      });
-      const data = await res.json();
-      setResult(data);
+      const res = await fetch('/api/safety-logs');
+      const json = await res.json();
+      if (json.success) {
+        setItems(json.data || []);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch Safety Logs records', err);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/safety-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: recordName, status }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowModal(false);
+        setRecordName('');
+        setStatus('Active');
+        fetchItems();
+      }
+    } catch (err) {
+      console.error('Failed to create Safety Logs record', err);
+    }
+  };
+
+  const filteredItems = items.filter(item =>
+    (item.name || item.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-2">TradeQuote PRO — Safety Incident & Near Miss Logging</h1>
-        <p className="text-slate-400 mb-8">Maintain rigorous safety compliance, document near misses, and verify hazard corrective actions.</p>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Project Name</label>
-              <input 
-                type="text" 
-                value={projectName} 
-                onChange={(e) => setProjectName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
-                required 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Reported By</label>
-              <input 
-                type="text" 
-                value={reportedBy} 
-                onChange={(e) => setReportedBy(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
-                required 
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Observation Type</label>
-              <select 
-                value={incidentType} 
-                onChange={(e) => setIncidentType(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="Near Miss">Near Miss</option>
-                <option value="Safety Hazard">Safety Hazard</option>
-                <option value="First Aid Incident">First Aid Incident</option>
-                <option value="Positive Safety Observation">Positive Safety Observation</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Severity Level</label>
-              <select 
-                value={severity} 
-                onChange={(e) => setSeverity(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
-              >
-                <option value="Low / Controlled">Low / Controlled</option>
-                <option value="Medium / Requires Attention">Medium / Requires Attention</option>
-                <option value="High / Stop Work">High / Stop Work</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Site Location</label>
-              <input 
-                type="text" 
-                value={location} 
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
-                required 
-              />
-            </div>
-          </div>
-
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Incident / Hazard Description</label>
-            <textarea 
-              rows={3}
-              value={description} 
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
-              required 
-            />
+            <h1 className="text-3xl font-bold tracking-tight text-white">Safety Logs Module</h1>
+            <p className="text-slate-400 mt-1">Manage industrial Safety Logs logs, compliance records, and site documentation.</p>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Corrective Action Taken</label>
-            <textarea 
-              rows={3}
-              value={correctiveAction} 
-              onChange={(e) => setCorrectiveAction(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
-              required 
-            />
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold py-3 rounded-xl transition"
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2.5 rounded-lg shadow transition-colors"
           >
-            {loading ? "Logging Safety Report..." : "Submit Safety & Compliance Log"}
+            + New Safety Logs Record
           </button>
-        </form>
+        </div>
 
-        {result && (
-          <div className="mt-8 bg-slate-900 border border-rose-500/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-rose-400 mb-2">Safety Log Recorded Successfully!</h3>
-            <pre className="bg-slate-950 p-4 rounded text-xs text-slate-300 overflow-x-auto font-mono">
-              {JSON.stringify(result, null, 2)}
-            </pre>
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search records..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full md:w-96 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+          />
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
+                  <th className="p-4">Record Name / Title</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Created Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {loading ? (
+                  <tr><td colSpan={3} className="p-8 text-center text-slate-500">Loading records...</td></tr>
+                ) : filteredItems.length === 0 ? (
+                  <tr><td colSpan={3} className="p-8 text-center text-slate-500">No records found. Create your first one above!</td></tr>
+                ) : (
+                  filteredItems.map((item) => (
+                    <tr key={item.id || Math.random()} className="hover:bg-slate-850/50 transition-colors">
+                      <td className="p-4 font-medium text-white">{item.name || item.title || 'Untitled Record'}</td>
+                      <td className="p-4">
+                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                          {item.status || 'Active'}
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-400 text-sm">{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {showModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+              <h2 className="text-xl font-bold text-white mb-4">Create New Safety Logs Record</h2>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Record Title / Name</label>
+                  <input type="text" required value={recordName} onChange={(e) => setRecordName(e.target.value)} placeholder="e.g. Substation Inspection Phase 1" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500" />
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button type="button" onClick={() => setShowModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors">Cancel</button>
+                  <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2 rounded-lg transition-colors">Save Record</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
