@@ -4,3 +4,30 @@ body {
   background-color: #020617;
   color: #f8fafc;
 }
+
+/* ============================================================================ */
+/* TRADEQUOTE PRO - MOBILE FIELD & SUNLIGHT READABILITY OPTIMIZATIONS           */
+/* ============================================================================ */
+@media (max-width: 768px) {
+  /* Increase minimum touch targets for gloved field use (min 48px) */
+  button, a, input, select {
+    min-height: 48px;
+    min-width: 48px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  
+  /* Optimize table layouts for horizontal touch scrolling on mobile tablets */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* High contrast sunlight-readable borders and focus states */
+.dark input:focus, .dark select:focus, .dark textarea:focus {
+  outline: 2px solid #f59e0b !important; /* Amber-500 high visibility */
+  border-color: #f59e0b !important;
+}
