@@ -1,116 +1,135 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-interface RecordItem {
-  id: string;
-  title?: string;
-  name?: string;
-  status?: string;
-  created_at?: string;
-}
+import Link from 'next/link';
 
 export default function Page() {
-  const [items, setItems] = useState<RecordItem[]>([]);
+  const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [recordName, setRecordName] = useState('');
+  const [name, setName] = useState('');
   const [status, setStatus] = useState('Active');
-
-  const fetchItems = async () => {
-    try {
-      const res = await fetch('/api/field-logs');
-      const json = await res.json();
-      if (json.success) {
-        setItems(json.data || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch Field Logs records', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchItems();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  async function fetchItems() {
+    try {
+      const res = await fetch('/api/field-logs');
+      const json = await res.json();
+      setItems(json.data || []);
+    } catch (err) {
+      console.error('Failed to fetch field-logs', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!name) return;
     try {
       const res = await fetch('/api/field-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: recordName, status }),
+        body: JSON.stringify({ name, title: name, status })
       });
       const json = await res.json();
       if (json.success) {
-        setShowModal(false);
-        setRecordName('');
-        setStatus('Active');
+        setName('');
         fetchItems();
       }
     } catch (err) {
-      console.error('Failed to create Field Logs record', err);
+      console.error('Failed to create record', err);
     }
-  };
+  }
 
-  const filteredItems = items.filter(item =>
-    (item.name || item.title || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  async function handleDelete(id: string) {
+    try {
+      await fetch('/api/field-logs/' + id, { method: 'DELETE' });
+      fetchItems();
+    } catch (err) {
+      console.error('Failed to delete record', err);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Field Logs Module</h1>
-            <p className="text-slate-400 mt-1">Manage industrial Field Logs logs, compliance records, and site documentation.</p>
+            <Link href="/" className="text-xs font-semibold text-amber-500 hover:underline uppercase tracking-wider">← Back to Command Center</Link>
+            <h1 className="text-3xl font-bold tracking-tight text-white mt-1">Field Logs Management</h1>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2.5 rounded-lg shadow transition-colors"
-          >
-            + New Field Logs Record
-          </button>
         </div>
 
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search records..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:w-96 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-          />
+        {/* Create Form */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl mb-8">
+          <h2 className="text-lg font-bold text-white mb-4">Add New Record</h2>
+          <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-4">
+            <input
+              type="text"
+              placeholder="Record Name / Title..."
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500"
+            />
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500"
+            >
+              <option value="Active">Active</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">Completed</option>
+            </select>
+            <button
+              type="submit"
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-6 py-3 rounded-xl transition-colors"
+            >
+              Add Record
+            </button>
+          </form>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        {/* Data Table */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+          <div className="p-6 border-b border-slate-800">
+            <h2 className="text-xl font-bold text-white">Records ({items.length})</h2>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="p-4">Record Name / Title</th>
+                <tr className="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider">
+                  <th className="p-4">ID / Name</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Created Date</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-800 text-sm">
                 {loading ? (
-                  <tr><td colSpan={3} className="p-8 text-center text-slate-500">Loading records...</td></tr>
-                ) : filteredItems.length === 0 ? (
-                  <tr><td colSpan={3} className="p-8 text-center text-slate-500">No records found. Create your first one above!</td></tr>
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-500">Loading records...</td></tr>
+                ) : items.length === 0 ? (
+                  <tr><td colSpan={4} className="p-6 text-center text-slate-500">No records found. Add one above.</td></tr>
                 ) : (
-                  filteredItems.map((item) => (
-                    <tr key={item.id || Math.random()} className="hover:bg-slate-850/50 transition-colors">
-                      <td className="p-4 font-medium text-white">{item.name || item.title || 'Untitled Record'}</td>
+                  items.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-850/50">
+                      <td className="p-4 font-medium text-white">{item.name || item.title || 'Untitled'}</td>
                       <td className="p-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+                        <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-semibold">
                           {item.status || 'Active'}
                         </span>
                       </td>
-                      <td className="p-4 text-slate-400 text-sm">{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Just now'}</td>
+                      <td className="p-4 text-slate-400">{new Date(item.created_at || Date.now()).toLocaleDateString()}</td>
+                      <td className="p-4 text-right">
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -118,24 +137,6 @@ export default function Page() {
             </table>
           </div>
         </div>
-
-        {showModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-              <h2 className="text-xl font-bold text-white mb-4">Create New Field Logs Record</h2>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Record Title / Name</label>
-                  <input type="text" required value={recordName} onChange={(e) => setRecordName(e.target.value)} placeholder="e.g. Substation Inspection Phase 1" className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500" />
-                </div>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button type="button" onClick={() => setShowModal(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors">Cancel</button>
-                  <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2 rounded-lg transition-colors">Save Record</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </main>
   );
