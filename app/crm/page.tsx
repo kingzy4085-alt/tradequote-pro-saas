@@ -44,7 +44,7 @@ export default function CrmPage() {
                 type="text" 
                 value={clientName} 
                 onChange={(e) => setClientName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -54,7 +54,7 @@ export default function CrmPage() {
                 type="text" 
                 value={contactPerson} 
                 onChange={(e) => setContactPerson(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -67,7 +67,7 @@ export default function CrmPage() {
                 type="text" 
                 value={phone} 
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 font-mono text-sm"
                 required 
               />
             </div>
@@ -77,7 +77,7 @@ export default function CrmPage() {
                 type="email" 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 font-mono text-sm"
                 required 
               />
             </div>
@@ -86,7 +86,7 @@ export default function CrmPage() {
               <select 
                 value={status} 
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="Active Shutdown">Active Shutdown</option>
                 <option value="Pending Estimate">Pending Estimate</option>
@@ -102,7 +102,7 @@ export default function CrmPage() {
               type="text" 
               value={projectSite} 
               onChange={(e) => setProjectSite(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
               required 
             />
           </div>

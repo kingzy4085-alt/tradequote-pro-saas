@@ -44,7 +44,7 @@ export default function SubCompliancePage() {
                 type="text" 
                 value={companyName} 
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -54,7 +54,7 @@ export default function SubCompliancePage() {
                 type="text" 
                 value={tradeType} 
                 onChange={(e) => setTradeType(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -67,7 +67,7 @@ export default function SubCompliancePage() {
                 type="text" 
                 value={wcbAccountNumber} 
                 onChange={(e) => setWcbAccountNumber(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono text-sm focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -77,7 +77,7 @@ export default function SubCompliancePage() {
                 type="date" 
                 value={generalLiabilityExpiry} 
                 onChange={(e) => setGeneralLiabilityExpiry(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -87,7 +87,7 @@ export default function SubCompliancePage() {
                 type="text" 
                 value={contactPerson} 
                 onChange={(e) => setContactPerson(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>

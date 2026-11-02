@@ -45,7 +45,7 @@ export default function VendorsPage() {
                 type="text" 
                 value={vendorName} 
                 onChange={(e) => setVendorName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -55,7 +55,7 @@ export default function VendorsPage() {
                 type="text" 
                 value={tradeCategory} 
                 onChange={(e) => setTradeCategory(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -68,7 +68,7 @@ export default function VendorsPage() {
                 type="text" 
                 value={contactPerson} 
                 onChange={(e) => setContactPerson(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -78,7 +78,7 @@ export default function VendorsPage() {
                 type="text" 
                 value={phone} 
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 font-mono text-sm"
                 required 
               />
             </div>
@@ -88,7 +88,7 @@ export default function VendorsPage() {
                 type="email" 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 font-mono text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 font-mono text-sm"
                 required 
               />
             </div>
@@ -101,7 +101,7 @@ export default function VendorsPage() {
                 type="text" 
                 value={wcbStatus} 
                 onChange={(e) => setWcbStatus(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -111,7 +111,7 @@ export default function VendorsPage() {
                 type="date" 
                 value={insuranceExpiry} 
                 onChange={(e) => setInsuranceExpiry(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>

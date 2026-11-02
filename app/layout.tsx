@@ -3,12 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 const InterSans = Inter({
-  variable: "--font-Inter-sans",
-  subsets: ["latin"],
-});
-
-const InterMono = Inter({
-  variable: "--font-Inter-mono",
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -21,7 +16,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${InterSans.variable} ${InterMono.variable} h-full antialiased`}
+      className={`${InterSans.variable} font-sans h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

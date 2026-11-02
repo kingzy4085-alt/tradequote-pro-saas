@@ -114,7 +114,7 @@ export default function Page() {
                   <tr><td colSpan={4} className="p-6 text-center text-slate-500">No records found. Add one above.</td></tr>
                 ) : (
                   items.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-850/50">
+                    <tr key={item.id} className="hover:bg-slate-800/50">
                       <td className="p-4 font-medium text-white">{item.name || item.title || 'Untitled'}</td>
                       <td className="p-4">
                         <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1 rounded-full text-xs font-semibold">

@@ -113,7 +113,7 @@ export default function EstimatesPage() {
                   </tr>
                 ) : (
                   filteredEstimates.map((est) => (
-                    <tr key={est.id || Math.random()} className="hover:bg-slate-850/50 transition-colors">
+                    <tr key={est.id || Math.random()} className="hover:bg-slate-800/50 transition-colors">
                       <td className="p-4 font-medium text-white">{est.projectName || 'Untitled Project'}</td>
                       <td className="p-4 text-slate-300">{est.clientName || 'N/A'}</td>
                       <td className="p-4 text-slate-300">{est.markupPercentage}%</td>

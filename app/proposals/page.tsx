@@ -44,7 +44,7 @@ export default function ProposalsPage() {
                 type="text" 
                 value={proposalTitle} 
                 onChange={(e) => setProposalTitle(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -54,7 +54,7 @@ export default function ProposalsPage() {
                 type="text" 
                 value={clientName} 
                 onChange={(e) => setClientName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -68,7 +68,7 @@ export default function ProposalsPage() {
                 step="0.01"
                 value={totalAmount} 
                 onChange={(e) => setTotalAmount(Number(e.target.value))}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-mono focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -79,7 +79,7 @@ export default function ProposalsPage() {
                 value={clientSignature} 
                 onChange={(e) => setClientSignature(e.target.value)}
                 placeholder="e.g., John Doe (Authorized Representative)"
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-serif italic focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white font-serif italic focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function ProposalsPage() {
               rows={3}
               value={scopeOfWork} 
               onChange={(e) => setScopeOfWork(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
               required 
             />
           </div>
@@ -101,7 +101,7 @@ export default function ProposalsPage() {
               rows={3}
               value={terms} 
               onChange={(e) => setTerms(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
               required 
             />
           </div>

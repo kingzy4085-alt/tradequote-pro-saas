@@ -45,7 +45,7 @@ export default function PunchListPage() {
                 type="text" 
                 value={itemTitle} 
                 onChange={(e) => setItemTitle(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -55,7 +55,7 @@ export default function PunchListPage() {
                 type="text" 
                 value={projectName} 
                 onChange={(e) => setProjectName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
                 required 
               />
             </div>
@@ -68,7 +68,7 @@ export default function PunchListPage() {
                 type="text" 
                 value={assignedTrade} 
                 onChange={(e) => setAssignedTrade(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -77,7 +77,7 @@ export default function PunchListPage() {
               <select 
                 value={priority} 
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500"
               >
                 <option value="Normal">Normal</option>
                 <option value="High">High</option>
@@ -90,7 +90,7 @@ export default function PunchListPage() {
                 type="text" 
                 value={location} 
                 onChange={(e) => locationSet(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -100,7 +100,7 @@ export default function PunchListPage() {
                 type="date" 
                 value={dueDate} 
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
                 required 
               />
             </div>
@@ -112,7 +112,7 @@ export default function PunchListPage() {
               rows={3}
               value={description} 
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500 text-sm"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 text-white focus:outline-none focus:border-amber-500 text-sm"
               required 
             />
           </div>
