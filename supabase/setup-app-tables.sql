@@ -615,3 +615,12 @@ alter table public."projects" add column if not exists description text;
 
 -- Refresh the API so the new tables are visible immediately
 notify pgrst, 'reload schema';
+
+-- Founding-list signups from the public /pricing page
+create table if not exists public."leads" (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  name text, company text, email text, phone text, tier text, billing text
+);
+alter table public."leads" enable row level security;
+notify pgrst, 'reload schema';
