@@ -118,7 +118,7 @@ export default function CrmPage() {
 
         {result && (
           <div className="mt-8 bg-slate-900 border border-emerald-500/50 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-emerald-400 mb-2">Client Saved Successfully!</h3>
+            <h3 className="text-lg font-bold text-emerald-400 mb-2">{result?.success === false ? 'Save failed: ' + result.error : 'Client Saved Successfully!'}</h3>
             <pre className="bg-slate-950 p-4 rounded text-xs text-slate-300 overflow-x-auto font-mono">
               {JSON.stringify(result, null, 2)}
             </pre>

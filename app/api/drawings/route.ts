@@ -24,10 +24,10 @@ export async function POST(request: Request) {
     }
     const { data, error } = await supabase.from('drawings').insert([body]).select();
     if (error) {
-      return NextResponse.json({ success: true, data: body }, { status: 200 });
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
     return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ success: true, data: body }, { status: 200 });
+    return NextResponse.json({ success: false, error: error?.message || 'Request failed' }, { status: 500 });
   }
 }

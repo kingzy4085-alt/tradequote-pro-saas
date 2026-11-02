@@ -18,9 +18,18 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
+    // Fill the original proposals columns from the form's fields
+    const row = {
+      ...body,
+      project_name: body.project_name ?? body.proposalTitle ?? 'Untitled Proposal',
+      client_name: body.client_name ?? body.clientName ?? null,
+      amount: body.amount ?? body.totalAmount ?? null,
+      scope_details: body.scope_details ?? body.scopeOfWork ?? null,
+      status: body.status ?? 'Draft',
+    };
+    const { data, error } = await supabase.from(TABLE_NAME).insert([row]).select();
     if (error) {
-      return NextResponse.json({ success: true, module: 'proposals', received: body, warning: error.message });
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
     return NextResponse.json({ success: true, module: 'proposals', data: data ? data[0] : body });
   } catch (err: any) {
