@@ -24,5 +24,5 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   // Everything except the files a phone needs to install the app
-  matcher: ['/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|icon.png|apple-icon.png|favicon.ico|pricing|api/leads).*)'],
+  matcher: ['/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|icon.png|apple-icon.png|favicon.ico|pricing|terms|privacy|api/leads).*)'],
 };

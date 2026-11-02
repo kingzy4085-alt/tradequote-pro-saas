@@ -35,6 +35,11 @@ export default function EstimatesPage() {
 
   useEffect(() => {
     fetchEstimates();
+    // Start new estimates from the default markup saved in Settings
+    try {
+      const saved = JSON.parse(localStorage.getItem('tq-settings') || '{}');
+      if (saved.markup) setMarkupPercentage(String(saved.markup));
+    } catch {}
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {

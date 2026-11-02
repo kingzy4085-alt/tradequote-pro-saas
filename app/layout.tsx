@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import RegisterServiceWorker from "./register-sw";
+import { SiteNav, SiteFooter } from "./site-nav";
 import "./globals.css";
 
 const InterSans = Inter({
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <RegisterServiceWorker />
-        {children}
+        <SiteNav />
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );
