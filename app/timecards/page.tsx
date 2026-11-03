@@ -15,6 +15,7 @@ interface Entry {
   total_cost: number;
   status: string;
   approved_by: string | null;
+  approved_at: string | null;
 }
 
 const iso = (d: Date) => d.toLocaleDateString('en-CA');
@@ -29,7 +30,6 @@ export default function TimecardsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ ...BLANK, work_date: iso(new Date()) });
-  const [approver, setApprover] = useState('');
   const from = iso(week), to = iso(addDays(week, 6));
 
   const load = () => {
@@ -57,8 +57,8 @@ export default function TimecardsPage() {
   }
 
   async function approveAll() {
-    if (!approver.trim()) return setError('Enter your name to approve.');
-    for (const en of entries.filter((x) => x.status !== 'Approved')) await call(`/api/timecards/${en.id}`, 'PUT', { action: 'approve', approved_by: approver });
+    if (!confirm('Approve all hours for this week? Approved hours are locked.')) return;
+    for (const en of entries.filter((x) => x.status !== 'Approved')) await call(`/api/timecards/${en.id}`, 'PUT', { action: 'approve' });
     load();
   }
 
@@ -135,7 +135,7 @@ export default function TimecardsPage() {
                     <td className="p-3 text-right text-slate-300">{Number(x.regular_hours)}</td>
                     <td className="p-3 text-right text-slate-300">{Number(x.overtime_hours)}</td>
                     <td className="p-3 text-right text-slate-300">{money(Number(x.total_cost))}</td>
-                    <td className={`p-3 ${x.status === 'Approved' ? 'text-emerald-400' : 'text-amber-400'}`}>{x.status === 'Approved' ? `Approved · ${x.approved_by}` : x.status}</td>
+                    <td className={`p-3 ${x.status === 'Approved' ? 'text-emerald-400' : 'text-amber-400'}`}>{x.status === 'Approved' ? `Approved ${x.approved_at ? new Date(x.approved_at).toLocaleDateString('en-CA') : ''}` : x.status}</td>
                     <td className="p-3 text-right whitespace-nowrap">
                       {x.status === 'Approved' ? (
                         <button onClick={async () => (await call(`/api/timecards/${x.id}`, 'PUT', { action: 'unapprove' })) && load()} className="text-xs text-slate-400 hover:text-amber-400">Unapprove</button>
@@ -151,7 +151,6 @@ export default function TimecardsPage() {
 
         {entries.some((x) => x.status !== 'Approved') && (
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <input placeholder="Your name" value={approver} onChange={(e) => setApprover(e.target.value)} className={`${input} sm:w-64`} aria-label="Approver name" />
             <button onClick={approveAll} className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold px-5 py-2 rounded-lg">Approve all for this week</button>
           </div>
         )}

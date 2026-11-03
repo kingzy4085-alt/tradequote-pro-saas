@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { fail, isUuid, ok, text } from '@/lib/api-helpers';
+import { fail, isUuid, ok } from '@/lib/api-helpers';
 import { TIMECARD_COLS, costOf, parseEntry } from '@/lib/timecards';
 
 const notFound = () => fail('Timecard not found.', 404);
@@ -15,9 +15,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
   let row: Record<string, unknown>;
   if (body.action === 'approve') {
-    const by = text(body.approved_by, 200)?.trim();
-    if (!by) return fail('Enter who is approving.', 400);
-    row = { status: 'Approved', approved_by: by, approved_at: new Date().toISOString() };
+    // The approver is the signed-in user (approved_by holds their user id)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return fail('Sign in first.', 401);
+    row = { status: 'Approved', approved_by: user.id, approved_at: new Date().toISOString() };
   } else if (body.action === 'unapprove') {
     row = { status: 'Submitted', approved_by: null, approved_at: null };
   } else {
