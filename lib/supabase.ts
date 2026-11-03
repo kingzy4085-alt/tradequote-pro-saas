@@ -32,6 +32,9 @@ export const supabase =
         get auth() {
           return createUserClient().auth;
         },
+        get storage() {
+          return createUserClient().storage;
+        },
       }
     : null;
 

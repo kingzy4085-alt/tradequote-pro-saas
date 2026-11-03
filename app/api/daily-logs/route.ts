@@ -1,29 +1,27 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-const TABLE_NAME = 'daily_logs';
+const fail = (message: string, status = 500) => NextResponse.json({ success: false, error: message }, { status });
 
 export async function GET() {
-  try {
-    const { data, error } = await supabase.from(TABLE_NAME).select('*');
-    if (error) {
-      return NextResponse.json({ success: true, module: 'daily-logs', data: [], warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'daily-logs', data });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+  if (!supabase) return fail('Database unavailable.', 503);
+  const { data, error } = await supabase
+    .from('daily-logs')
+    .select('id, created_at, log_date, project, crew, crew_count, hours, weather, photos, signed_by, signed_at')
+    .order('log_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) return fail(error.message);
+  return NextResponse.json({ success: true, data });
 }
 
+// Starts a new log for today; details are filled in on the log page
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, module: 'daily-logs', received: body, warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'daily-logs', data: data ? data[0] : body });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+  if (!supabase) return fail('Database unavailable.', 503);
+  const body = await request.json().catch(() => ({}));
+  const project = typeof body.project === 'string' ? body.project.trim().slice(0, 200) : '';
+  if (!project) return fail('Project is required.', 400);
+  const log_date = /^\d{4}-\d{2}-\d{2}$/.test(body.log_date) ? body.log_date : undefined;
+  const { data, error } = await supabase.from('daily-logs').insert([{ project, name: project, log_date }]).select().single();
+  if (error) return fail(error.message);
+  return NextResponse.json({ success: true, data });
 }
