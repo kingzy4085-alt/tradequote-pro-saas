@@ -1,7 +1,6 @@
+import { redirect } from 'next/navigation';
+
+// Progress billing and receivables are handled on Invoices
 export default function Page() {
-  return (
-    <div className='p-6'>
-      <h1>receivables Module</h1>
-    </div>
-  )
+  redirect('/invoices');
 }
