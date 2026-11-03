@@ -1,47 +1,45 @@
-import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
+import { fail, ok } from '@/lib/api-helpers';
+import { TIERS, lookupKey, stripe, type Tier } from '@/lib/stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mockkey', {
-  apiVersion: '2025-02-28.acacia' as any,
-});
-
+// Starts Stripe Checkout for the signed-in company's subscription
 export async function POST(request: Request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const { email, planName = 'TradeQuote PRO Enterprise License' } = body;
+  if (!stripe || !supabase || !supabaseAdmin) return fail('Billing is not set up yet.', 503);
+  const body = await request.json().catch(() => ({}));
+  const tier = body.tier as Tier;
+  const interval = body.interval === 'annual' ? 'annual' : 'monthly';
+  if (!TIERS.includes(tier)) return fail('Choose a plan.', 400);
 
-    // Generate a secure software license key for the customer
-    const licenseKey = 'TQP-' + Math.random().toString(36).substring(2, 8).toUpperCase() + '-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: companyId } = await supabase.rpc('current_company_id');
+  if (!user || !companyId) return fail('Sign in first.', 401);
+  const { data: company } = await supabase.from('companies').select('id, company_name, email, stripe_customer_id, subscription_status').eq('id', companyId).maybeSingle();
+  if (!company) return fail('Company not found.', 404);
+  if (['active', 'trialing', 'past_due'].includes(company.subscription_status) && company.stripe_customer_id)
+    return fail('You already have a subscription. Use Manage billing to change plans.', 409);
 
-    // If Stripe secret key is configured, create real checkout session
-    if (process.env.STRIPE_SECRET_KEY) {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'cad',
-            product_data: { name: planName },
-            unit_amount: 14900, // $149 CAD / month
-          },
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        success_url: `${request.headers.get('origin')}/dashboard?success=true&license=${licenseKey}`,
-        cancel_url: `${request.headers.get('origin')}/pricing?canceled=true`,
-        customer_email: email,
-      });
+  const prices = await stripe.prices.list({ lookup_keys: [lookupKey(tier, interval)], limit: 1 });
+  if (!prices.data[0]) return fail('That plan isn\'t available yet.', 503);
 
-      return NextResponse.json({ success: true, url: session.url, licenseKey }, { status: 200 });
-    }
-
-    // Fallback response for instant local storefront checkout testing
-    return NextResponse.json({ 
-      success: true, 
-      url: `/dashboard?success=true&license=${licenseKey}`, 
-      licenseKey,
-      message: 'Mock Stripe session created successfully' 
-    }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message || 'Stripe checkout failed' }, { status: 500 });
+  let customer = company.stripe_customer_id as string | null;
+  if (!customer) {
+    customer = (await stripe.customers.create({ name: company.company_name, email: company.email || user.email, metadata: { company_id: company.id } })).id;
+    // Customer id is written with the service client: members can't edit billing fields directly
+    await supabaseAdmin.from('companies').update({ stripe_customer_id: customer }).eq('id', company.id);
   }
+
+  const origin = new URL(request.url).origin;
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer,
+    client_reference_id: company.id,
+    line_items: [{ price: prices.data[0].id, quantity: 1 }],
+    subscription_data: { metadata: { company_id: company.id, tier } },
+    metadata: { company_id: company.id, tier },
+    allow_promotion_codes: true,
+    automatic_tax: { enabled: false },
+    success_url: `${origin}/billing?checkout=success`,
+    cancel_url: `${origin}/billing?checkout=cancelled`,
+  });
+  return ok({ url: session.url });
 }

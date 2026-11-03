@@ -16,6 +16,7 @@ const LINKS = [
   { href: '/', label: 'Dashboard' },
   { href: '/help', label: 'How to Use' },
   { href: '/settings', label: 'Settings' },
+  { href: '/billing', label: 'Billing' },
   { href: '/about', label: 'About' },
   { href: '/pricing', label: 'Pricing' },
 ];
