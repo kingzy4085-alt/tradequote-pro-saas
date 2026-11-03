@@ -34,3 +34,8 @@ input:focus, select:focus, textarea:focus {
   outline: 2px solid #f59e0b !important; /* Amber-500 high visibility */
   border-color: #f59e0b !important;
 }
+
+@media print {
+  @page { size: letter; margin: 0.6in; }
+  html, body { background: #fff !important; color: #000; }
+}

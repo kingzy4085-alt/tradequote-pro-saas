@@ -1,28 +1,49 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
-// Password gate for the whole app until real Supabase login is built.
-// Set APP_USERNAME and APP_PASSWORD; with no password set (local dev) the gate is off.
-export function middleware(req: NextRequest) {
-  const password = process.env.APP_PASSWORD;
-  if (!password) return NextResponse.next();
-  // The desktop launcher runs on this computer only
-  const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').replace(/:\d+$/, '');
-  if (!process.env.VERCEL && ['localhost', '127.0.0.1', '[::1]'].includes(host)) return NextResponse.next();
+const PUBLIC = ['/pricing', '/terms', '/privacy', '/login', '/signup', '/api/leads'];
 
-  const username = process.env.APP_USERNAME || 'tradequote';
-  const header = req.headers.get('authorization') || '';
-  if (header.startsWith('Basic ')) {
-    const [user, ...rest] = atob(header.slice(6)).split(':');
-    if (user === username && rest.join(':') === password) return NextResponse.next();
+// Keeps the Supabase session fresh, sends signed-out visitors to /login and new accounts to /onboarding.
+export async function middleware(req: NextRequest) {
+  let res = NextResponse.next({ request: req });
+  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: {
+      getAll: () => req.cookies.getAll(),
+      setAll: (list) => {
+        list.forEach(({ name, value }) => req.cookies.set(name, value));
+        res = NextResponse.next({ request: req });
+        list.forEach(({ name, value, options }) => res.cookies.set(name, value, options));
+      },
+    },
+  });
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const path = req.nextUrl.pathname;
+  const isPublic = PUBLIC.some((p) => path === p || path.startsWith(p + '/'));
+  const isApi = path.startsWith('/api/');
+
+  const redirect = (to: string) => {
+    const r = NextResponse.redirect(new URL(to, req.url));
+    res.cookies.getAll().forEach((c) => r.cookies.set(c));
+    return r;
+  };
+
+  if (!user) {
+    if (isPublic) return res;
+    if (isApi) return NextResponse.json({ success: false, error: 'Please sign in.' }, { status: 401 });
+    return redirect(`/login?next=${encodeURIComponent(path)}`);
   }
 
-  return new NextResponse('Sign in required', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="TradeQuote PRO", charset="UTF-8"' },
-  });
+  if (isPublic || path === '/onboarding' || path === '/api/onboarding') return res;
+  const { data: companyId } = await supabase.rpc('current_company_id');
+  if (!companyId) {
+    if (isApi) return NextResponse.json({ success: false, error: 'Set up your company first.' }, { status: 403 });
+    return redirect('/onboarding');
+  }
+  return res;
 }
 
 export const config = {
   // Everything except the files a phone needs to install the app
-  matcher: ['/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|icon.png|apple-icon.png|favicon.ico|pricing|terms|privacy|api/leads).*)'],
+  matcher: ['/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|icon.png|apple-icon.png|favicon.ico).*)'],
 };

@@ -1,9 +1,5 @@
-export default function LoginPage(){
+import { AuthForm } from '../auth-form';
 
- return (
-  <div>
-   Login
-  </div>
- )
-
+export default function LoginPage() {
+  return <AuthForm mode="login" />;
 }

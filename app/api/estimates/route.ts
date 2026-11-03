@@ -4,26 +4,17 @@ import { supabase } from '@/lib/supabase';
 const TABLE_NAME = 'estimates';
 
 export async function GET() {
-  try {
-    const { data, error } = await supabase.from(TABLE_NAME).select('*');
-    if (error) {
-      return NextResponse.json({ success: true, module: 'estimates', data: [], warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'estimates', data });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+  if (!supabase) return NextResponse.json({ success: false, error: 'Database unavailable.' }, { status: 503 });
+  const { data, error } = await supabase.from(TABLE_NAME).select('*').order('created_at', { ascending: false });
+  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, module: 'estimates', data });
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, module: 'estimates', received: body, warning: error.message });
-    }
-    return NextResponse.json({ success: true, module: 'estimates', data: data ? data[0] : body });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
-  }
+  if (!supabase) return NextResponse.json({ success: false, error: 'Database unavailable.' }, { status: 503 });
+  const body = await request.json().catch(() => ({}));
+  delete body.company_id;
+  const { data, error } = await supabase.from(TABLE_NAME).insert([body]).select().single();
+  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true, module: 'estimates', data });
 }

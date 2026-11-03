@@ -3,6 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { supabaseBrowser } from '@/lib/supabase-browser';
+
+const SIGNED_OUT = ['/login', '/signup', '/pricing', '/terms', '/privacy'];
+
+async function signOut() {
+  await supabaseBrowser().auth.signOut();
+  window.location.href = '/login';
+}
 
 const LINKS = [
   { href: '/', label: 'Dashboard' },
@@ -18,7 +26,7 @@ export function SiteNav() {
   const active = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+    <header className="print:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur border-b border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {path !== '/' && (
@@ -46,6 +54,11 @@ export function SiteNav() {
             </Link>
           ))}
         </nav>
+        {!SIGNED_OUT.includes(path) && (
+          <button onClick={signOut} className="hidden md:inline-flex ml-2 text-slate-300 hover:text-white border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold">
+            Sign out
+          </button>
+        )}
         <button
           onClick={() => setOpen(!open)}
           className="md:hidden text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm font-semibold"
@@ -61,6 +74,9 @@ export function SiteNav() {
               {l.label}
             </Link>
           ))}
+          {!SIGNED_OUT.includes(path) && (
+            <button onClick={signOut} className="py-3 text-left text-sm font-medium text-slate-300">Sign out</button>
+          )}
         </nav>
       )}
     </header>
@@ -69,7 +85,7 @@ export function SiteNav() {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-slate-800 mt-auto">
+    <footer className="print:hidden border-t border-slate-800 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 text-sm text-slate-500 flex flex-col sm:flex-row justify-between gap-3">
         <span>© {new Date().getFullYear()} TradeQuote PRO. All rights reserved · Industrial Shutdown & Electrical Contracting Operations Hub</span>
         <span className="flex gap-4">

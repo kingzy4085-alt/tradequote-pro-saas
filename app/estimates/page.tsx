@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { money } from '@/lib/estimate-math';
 
 interface Estimate {
   id: string;
   projectName: string;
   clientName: string;
   markupPercentage: number;
+  total_bid: number | null;
+  status: string | null;
   created_at: string;
 }
 
@@ -18,6 +21,8 @@ export default function EstimatesPage() {
   const [projectName, setProjectName] = useState('');
   const [clientName, setClientName] = useState('');
   const [markupPercentage, setMarkupPercentage] = useState('15');
+  const [companyDefaults, setCompanyDefaults] = useState<any>({});
+  const [error, setError] = useState('');
 
   const fetchEstimates = async () => {
     try {
@@ -36,10 +41,10 @@ export default function EstimatesPage() {
   useEffect(() => {
     fetchEstimates();
     // Start new estimates from the default markup saved in Settings
-    try {
-      const saved = JSON.parse(localStorage.getItem('tq-settings') || '{}');
-      if (saved.markup) setMarkupPercentage(String(saved.markup));
-    } catch {}
+    fetch('/api/company').then((r) => r.json()).then((j) => {
+      if (j.data) setCompanyDefaults(j.data);
+      if (j.data?.default_markup != null) setMarkupPercentage(String(j.data.default_markup));
+    }).catch(() => {});
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -48,15 +53,17 @@ export default function EstimatesPage() {
       const res = await fetch('/api/estimates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectName, clientName, markupPercentage: Number(markupPercentage) }),
+        body: JSON.stringify({
+          projectName,
+          clientName,
+          markupPercentage: Number(markupPercentage),
+          taxPercentage: Number(companyDefaults.default_tax ?? 5),
+          labourRate: Number(companyDefaults.default_labour_rate ?? 0),
+        }),
       });
       const json = await res.json();
-      if (json.success) {
-        setShowModal(false);
-        setProjectName('');
-        setClientName('');
-        fetchEstimates();
-      }
+      if (json.success) window.location.href = `/estimates/${json.data.id}`;
+      else setError(json.error || 'Could not save the estimate.');
     } catch (err) {
       console.error('Failed to create estimate', err);
     }
@@ -103,25 +110,27 @@ export default function EstimatesPage() {
                 <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
                   <th className="p-4">Project Name</th>
                   <th className="p-4">Client</th>
-                  <th className="p-4">Markup (%)</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 text-right">Total</th>
                   <th className="p-4">Created Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">Loading estimates...</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-500">Loading estimates...</td>
                   </tr>
                 ) : filteredEstimates.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-slate-500">No estimates found. Create your first one above!</td>
+                    <td colSpan={5} className="p-8 text-center text-slate-500">No estimates found. Create your first one above!</td>
                   </tr>
                 ) : (
                   filteredEstimates.map((est) => (
-                    <tr key={est.id || Math.random()} className="hover:bg-slate-800/50 transition-colors">
-                      <td className="p-4 font-medium text-white">{est.projectName || 'Untitled Project'}</td>
+                    <tr key={est.id} onClick={() => (window.location.href = `/estimates/${est.id}`)} className="hover:bg-slate-800/50 transition-colors cursor-pointer">
+                      <td className="p-4 font-medium text-white"><a href={`/estimates/${est.id}`}>{est.projectName || 'Untitled Project'}</a></td>
                       <td className="p-4 text-slate-300">{est.clientName || 'N/A'}</td>
-                      <td className="p-4 text-slate-300">{est.markupPercentage}%</td>
+                      <td className="p-4 text-slate-300">{est.status || 'Draft'}</td>
+                      <td className="p-4 text-slate-300 text-right">{est.total_bid != null ? money(Number(est.total_bid)) : '—'}</td>
                       <td className="p-4 text-slate-400 text-sm">{est.created_at ? new Date(est.created_at).toLocaleDateString() : 'Just now'}</td>
                     </tr>
                   ))
@@ -169,6 +178,7 @@ export default function EstimatesPage() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
                   />
                 </div>
+                {error && <p className="text-sm text-red-400">{error}</p>}
                 <div className="flex justify-end gap-3 mt-6">
                   <button
                     type="button"

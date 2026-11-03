@@ -2,37 +2,40 @@
 
 import { useEffect, useState } from 'react';
 
-const KEY = 'tq-settings';
-const DEFAULTS = { company: '', contact: '', phone: '', email: '', province: 'SK', markup: '15', taxRate: '5' };
-
-function loadSettings(): typeof DEFAULTS {
-  try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
-  } catch {
-    return DEFAULTS;
-  }
-}
+// Company profile and estimating defaults, saved to your company's record
+const DEFAULTS = { company_name: '', contact: '', phone: '', email: '', address: '', province: 'SK', default_markup: '15', default_tax: '5', default_labour_rate: '0', default_terms: '' };
+type Fields = typeof DEFAULTS;
 
 export default function SettingsPage() {
-  const [s, setS] = useState(DEFAULTS);
-  const [saved, setSaved] = useState(false);
+  const [s, setS] = useState<Fields>(DEFAULTS);
+  const [status, setStatus] = useState('');
   const [db, setDb] = useState('checking…');
 
   useEffect(() => {
-    setS(loadSettings());
+    fetch('/api/company').then((r) => r.json()).then((j) => {
+      if (!j.data) return;
+      const next = { ...DEFAULTS };
+      for (const k of Object.keys(DEFAULTS) as (keyof Fields)[]) if (j.data[k] != null) next[k] = String(j.data[k]);
+      setS(next);
+    }).catch(() => {});
     fetch('/api/health').then((r) => r.json()).then((j) => setDb(j.database)).catch(() => setDb('offline'));
   }, []);
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setStatus('Saving…');
+    const res = await fetch('/api/company', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...s, default_markup: Number(s.default_markup) || 0, default_tax: Number(s.default_tax) || 0, default_labour_rate: Number(s.default_labour_rate) || 0 }),
+    }).then((r) => r.json()).catch(() => ({ success: false, error: 'Network error' }));
+    setStatus(res.success ? 'Saved' : `Not saved: ${res.error}`);
+    if (res.success) setTimeout(() => setStatus(''), 2500);
   }
 
   const input = 'w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-amber-500';
   const label = 'block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1';
-  const field = (k: keyof typeof DEFAULTS, l: string, type = 'text') => (
+  const field = (k: keyof Fields, l: string, type = 'text') => (
     <div>
       <label className={label} htmlFor={k}>{l}</label>
       <input id={k} type={type} className={input} value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} />
@@ -50,10 +53,11 @@ export default function SettingsPage() {
         <form onSubmit={save} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
           <h2 className="text-lg font-bold text-white mb-4">Company profile</h2>
           <div className="grid sm:grid-cols-2 gap-4">
-            {field('company', 'Company name')}
+            {field('company_name', 'Company name')}
             {field('contact', 'Main contact')}
             {field('phone', 'Phone', 'tel')}
             {field('email', 'Email', 'email')}
+            {field('address', 'Address')}
             <div>
               <label className={label} htmlFor="province">Province</label>
               <select id="province" className={input} value={s.province} onChange={(e) => setS({ ...s, province: e.target.value })}>
@@ -63,14 +67,19 @@ export default function SettingsPage() {
           </div>
           <h2 className="text-lg font-bold text-white mt-8 mb-4">Estimating defaults</h2>
           <div className="grid sm:grid-cols-2 gap-4">
-            {field('markup', 'Default markup %', 'number')}
-            {field('taxRate', 'Sales tax %', 'number')}
+            {field('default_markup', 'Default markup %', 'number')}
+            {field('default_tax', 'Sales tax %', 'number')}
+            {field('default_labour_rate', 'Labour rate ($/hr)', 'number')}
+          </div>
+          <div className="mt-4">
+            <label className={label} htmlFor="default_terms">Proposal terms</label>
+            <textarea id="default_terms" rows={4} className={input} value={s.default_terms} onChange={(e) => setS({ ...s, default_terms: e.target.value })} />
           </div>
           <div className="flex items-center gap-4 mt-6">
             <button className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-6 py-3 rounded-xl transition-colors">Save Settings</button>
-            {saved && <span className="text-sm text-emerald-400 font-semibold">Saved</span>}
+            {status && <span className={`text-sm font-semibold ${status.startsWith('Not') ? 'text-red-400' : 'text-emerald-400'}`}>{status}</span>}
           </div>
-          <p className="text-xs text-slate-500 mt-4">Settings are saved on this device. New estimates start with your default markup.</p>
+          <p className="text-xs text-slate-500 mt-4">Saved to your company account. New estimates start with these defaults, and proposals show these details.</p>
         </form>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
@@ -85,7 +94,7 @@ export default function SettingsPage() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl grid sm:grid-cols-3 gap-4 text-sm">
           <div><p className={label}>Database</p><p className={db === 'connected' ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>{db}</p></div>
           <div><p className={label}>Version</p><p className="text-white">1.0</p></div>
-          <div><p className={label}>Sign-in</p><p className="text-white">Shared company password</p></div>
+          <div><p className={label}>Sign-in</p><p className="text-white">Your own email login</p></div>
         </div>
       </div>
     </main>
