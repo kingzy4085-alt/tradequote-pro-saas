@@ -16,4 +16,12 @@ export const env = {
   stripeWebhookSecret: () => required('STRIPE_WEBHOOK_SECRET'),
   stripePriceId: () => required('STRIPE_PRICE_ID'),
   anthropicModel: () => process.env.ANTHROPIC_MODEL || 'claude-opus-5-5',
+  cronSecret: () => required('CRON_SECRET'),
+  resendApiKey: () => required('RESEND_API_KEY'),
+  emailFrom: () => required('EMAIL_FROM'),
+  emailReplyTo: () => process.env.EMAIL_REPLY_TO || undefined,
+  businessName: () => required('BUSINESS_NAME'),
+  businessAddress: () => required('BUSINESS_MAILING_ADDRESS'),
+  /** Signs unsubscribe links; falls back to CRON_SECRET so one secret is enough to start. */
+  unsubscribeSecret: () => process.env.UNSUBSCRIBE_SECRET || required('CRON_SECRET'),
 };

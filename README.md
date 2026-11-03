@@ -17,6 +17,7 @@ Operations software for Canadian industrial and electrical contractors: estimati
    - Auth → Email: keep "Confirm email" on, and set up custom SMTP before launch (Supabase's built-in sender is rate limited).
 2. **Stripe** — create a Product with a recurring monthly **CAD** Price and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.
 3. **Claude API** — create a key at console.anthropic.com.
+   - **Trial emails** — run [`supabase/migrations/20261101000100_trial_emails.sql`](supabase/migrations/20261101000100_trial_emails.sql) after the baseline. Create a [Resend](https://resend.com) account, verify your domain and add an API key. Set `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `BUSINESS_NAME` and `BUSINESS_MAILING_ADDRESS`. On Vercel, [`vercel.json`](vercel.json) runs `/api/cron/trial-emails` daily. Elsewhere, call it once a day with `Authorization: Bearer $CRON_SECRET`. Owners get five emails over the trial (days 0, 2, 5, 10 and 13), and each email has an unsubscribe link.
 4. Copy `.env.example` to `.env.local` and fill it in.
 5. Install and run:
 

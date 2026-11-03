@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 // Reachable without signing in. Everything else requires a session.
-const PUBLIC_PATHS = ['/login', '/signup', '/reset-password', '/auth/', '/legal/', '/api/stripe/webhook'];
+const PUBLIC_PATHS = ['/login', '/signup', '/reset-password', '/auth/', '/legal/', '/api/stripe/webhook', '/api/cron/', '/api/email/unsubscribe'];
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p));

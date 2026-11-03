@@ -60,6 +60,7 @@ beforeAll(async () => {
   db = await PGlite.create();
   await db.exec(SUPABASE_STUB);
   await db.exec(readFileSync(MIGRATION_PATH, 'utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261101000100_trial_emails.sql', 'utf8'));
   for (const u of Object.values(users)) await db.query('insert into auth.users (id, email) values ($1, $2)', [u.id, u.email]);
 
   await as('ownerA', `select public.create_company('Alpha Electric', 'SK', 'Alex Owner')`);
@@ -154,6 +155,17 @@ describe('roles', () => {
     await expect(as('ownerA', `update public.companies set subscription_status = 'active'`)).rejects.toThrow(/permission denied/);
     await as('ownerA', `update public.companies set name = 'Alpha Electric Ltd.'`);
     expect((await as<{ name: string }>('ownerA', 'select name from public.companies'))[0].name).toBe('Alpha Electric Ltd.');
+  });
+});
+
+describe('trial email tables', () => {
+  it('are hidden from users and visitors', async () => {
+    await db.exec(`insert into public.email_unsubscribes (email) values ('owner@alpha.ca')`);
+    for (const t of ['trial_emails', 'email_unsubscribes']) {
+      expect(await fails('ownerA', `select * from public.${t}`)).toMatch(/permission denied/);
+      expect(await fails(null, `select * from public.${t}`)).toMatch(/permission denied/);
+    }
+    expect(await fails('ownerA', 'delete from public.email_unsubscribes')).toMatch(/permission denied/);
   });
 });
 
