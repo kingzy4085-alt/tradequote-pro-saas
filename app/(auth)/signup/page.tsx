@@ -54,6 +54,10 @@ export default function SignupPage() {
           <Link href="/login" className="text-amber-400 hover:underline">
             Sign in
           </Link>
+          {' · '}
+          <Link href="/pricing" className="text-amber-400 hover:underline">
+            See plans
+          </Link>
         </>
       }
     >

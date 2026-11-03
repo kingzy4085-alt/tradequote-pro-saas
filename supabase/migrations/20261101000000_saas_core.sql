@@ -17,6 +17,15 @@ create table public.companies (
   subscription_status text not null default 'trialing',
   trial_ends_at timestamptz not null default (now() + interval '14 days'),
   current_period_end timestamptz,
+  -- Profile and estimating defaults shown on proposals
+  contact text check (char_length(contact) <= 200),
+  phone text check (char_length(phone) <= 40),
+  email text check (char_length(email) <= 320),
+  address text check (char_length(address) <= 500),
+  default_markup numeric(6,2) not null default 15 check (default_markup between 0 and 1000),
+  default_tax numeric(6,2) not null default 5 check (default_tax between 0 and 100),
+  default_labour_rate numeric(10,2) not null default 0 check (default_labour_rate between 0 and 100000),
+  default_terms text check (char_length(default_terms) <= 10000),
   created_at timestamptz not null default now()
 );
 
@@ -200,7 +209,7 @@ alter table public.stripe_events enable row level security;
 create policy companies_select on public.companies for select to authenticated
   using (id = public.user_company_id());
 create policy companies_update on public.companies for update to authenticated
-  using (id = public.user_company_id() and public.user_rank() = 5)
+  using (id = public.user_company_id() and public.user_rank() >= 4)
   with check (id = public.user_company_id());
 
 create policy company_users_select on public.company_users for select to authenticated
@@ -220,7 +229,8 @@ create policy ai_usage_select on public.ai_usage for select to authenticated
 
 revoke all on public.companies, public.company_users, public.invitations, public.ai_usage, public.stripe_events from anon, authenticated;
 grant select on public.companies, public.company_users, public.ai_usage to authenticated;
-grant update (name, province) on public.companies to authenticated;
+grant update (name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms)
+  on public.companies to authenticated;
 grant select, insert, delete on public.invitations to authenticated;
 
 revoke execute on function public.role_rank(text), public.user_company_id(), public.user_rank(),
@@ -246,6 +256,10 @@ create table public.daily_logs (
   crew_lead text,
   weather text,
   crew_count numeric,
+  hours numeric,
+  work_done text,
+  delays text,
+  safety_notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -567,9 +581,14 @@ create table public.estimates (
   status text not null,
   notes text,
   client_name text,
+  client_address text,
   bid_due date,
+  labour_rate numeric(14,2),
   markup_percentage numeric,
+  tax_percentage numeric,
   total_amount numeric(14,2),
+  scope text,
+  terms text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1516,3 +1535,140 @@ create policy warehouse_inventory_delete on public.warehouse_inventory for delet
   using (company_id = public.user_company_id() and public.user_rank() >= 3);
 revoke all on public.warehouse_inventory from anon;
 grant select, insert, update, delete on public.warehouse_inventory to authenticated;
+
+-- Features ----------------------------------------------------------------------
+
+-- New estimates start with the company's markup, tax, labour rate and terms
+create or replace function public.estimate_defaults() returns trigger
+language plpgsql as $$
+declare
+  c public.companies%rowtype;
+begin
+  select * into c from public.companies where id = new.company_id;
+  new.markup_percentage := coalesce(new.markup_percentage, c.default_markup);
+  new.tax_percentage := coalesce(new.tax_percentage, c.default_tax);
+  new.labour_rate := coalesce(new.labour_rate, c.default_labour_rate);
+  new.terms := coalesce(new.terms, c.default_terms);
+  return new;
+end $$;
+create trigger estimates_defaults before insert on public.estimates for each row execute function public.estimate_defaults();
+alter table public.estimates
+  add constraint estimates_rates_check check (coalesce(markup_percentage, 0) between 0 and 1000
+    and coalesce(tax_percentage, 0) between 0 and 100 and coalesce(labour_rate, 0) >= 0);
+
+-- Estimate line items: visible and editable to whoever can work on the parent estimate
+create table public.estimate_items (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null default public.user_company_id() references public.companies(id) on delete cascade,
+  estimate_id uuid not null references public.estimates(id) on delete cascade,
+  sort integer not null default 0,
+  description text not null default '' check (char_length(description) <= 500),
+  quantity numeric(14,3) not null default 1 check (quantity >= 0),
+  unit text not null default 'ea' check (char_length(unit) <= 20),
+  material_unit_cost numeric(14,2) not null default 0 check (material_unit_cost >= 0),
+  labour_hours_per_unit numeric(12,3) not null default 0 check (labour_hours_per_unit >= 0)
+);
+create index estimate_items_estimate_idx on public.estimate_items(estimate_id, sort);
+alter table public.estimate_items enable row level security;
+create policy estimate_items_select on public.estimate_items for select to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= 3
+         and exists (select 1 from public.estimates e where e.id = estimate_id and e.company_id = estimate_items.company_id));
+create policy estimate_items_insert on public.estimate_items for insert to authenticated
+  with check (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write()
+              and exists (select 1 from public.estimates e where e.id = estimate_id and e.company_id = estimate_items.company_id));
+create policy estimate_items_update on public.estimate_items for update to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
+  with check (company_id = public.user_company_id()
+              and exists (select 1 from public.estimates e where e.id = estimate_id and e.company_id = estimate_items.company_id));
+create policy estimate_items_delete on public.estimate_items for delete to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
+revoke all on public.estimate_items from anon;
+grant select, insert, update, delete on public.estimate_items to authenticated;
+
+-- Replaces an estimate's lines and stores its total in one transaction, as the caller (row security applies)
+create or replace function public.save_estimate_items(p_estimate uuid, p_items jsonb, p_total numeric)
+returns void language plpgsql security invoker set search_path = public as $$
+begin
+  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) > 1000 then
+    raise exception 'An estimate can have up to 1000 lines' using errcode = '22023';
+  end if;
+  update public.estimates set total_amount = round(p_total, 2) where id = p_estimate;
+  if not found then raise exception 'Estimate not found' using errcode = 'P0002'; end if;
+  delete from public.estimate_items where estimate_id = p_estimate;
+  insert into public.estimate_items (estimate_id, sort, description, quantity, unit, material_unit_cost, labour_hours_per_unit)
+  select p_estimate, (t.ord - 1)::integer,
+         coalesce(t.x ->> 'description', ''), coalesce((t.x ->> 'quantity')::numeric, 0), coalesce(t.x ->> 'unit', 'ea'),
+         coalesce((t.x ->> 'material_unit_cost')::numeric, 0), coalesce((t.x ->> 'labour_hours_per_unit')::numeric, 0)
+  from jsonb_array_elements(p_items) with ordinality as t(x, ord);
+end $$;
+
+-- Daily logs: job photos and a signed sign-off that locks the log
+alter table public.daily_logs
+  add column photos jsonb not null default '[]',
+  add column signed_by text check (char_length(signed_by) <= 200),
+  add column signature text check (signature like 'data:image/png;base64,%' and char_length(signature) <= 300000),
+  add column signed_at timestamptz;
+
+create or replace function public.guard_daily_log() returns trigger
+language plpgsql as $$
+declare
+  v_prefix text;
+  v_photo jsonb;
+  v_fixed text[] := array['signed_at', 'signed_by', 'signature', 'updated_at'];
+begin
+  if tg_op = 'UPDATE' and old.signed_at is not null then
+    -- A signed log only changes by being reopened, which clears the signature and nothing else
+    if new.signed_at is not null or new.signed_by is not null or new.signature is not null
+       or (to_jsonb(new) - v_fixed) is distinct from (to_jsonb(old) - v_fixed) then
+      raise exception 'This log is signed. Reopen it to make changes.' using errcode = 'P0001';
+    end if;
+    if public.user_rank() < 2 then
+      raise exception 'Only a foreman or above can reopen a signed log.' using errcode = 'P0001';
+    end if;
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.signed_at := null; new.signed_by := null; new.signature := null;
+  elsif new.signed_at is not null then
+    if coalesce(btrim(new.signed_by), '') = '' or new.signature is null then
+      raise exception 'Enter the name of the person signing and draw a signature.' using errcode = 'P0001';
+    end if;
+    new.signed_by := btrim(new.signed_by);
+    new.signed_at := now();
+  else
+    new.signed_by := null; new.signature := null;
+  end if;
+
+  -- Photos must be files in this log's own folder of the company's storage
+  v_prefix := new.company_id::text || '/daily-logs/' || new.id::text || '/';
+  if jsonb_typeof(new.photos) is distinct from 'array' or jsonb_array_length(new.photos) > 50 then
+    raise exception 'A log can have up to 50 photos.' using errcode = 'P0001';
+  end if;
+  for v_photo in select * from jsonb_array_elements(new.photos) loop
+    if jsonb_typeof(v_photo) <> 'string' or left(v_photo #>> '{}', length(v_prefix)) <> v_prefix
+       or position('..' in v_photo #>> '{}') > 0 or char_length(v_photo #>> '{}') > 300 then
+      raise exception 'Invalid photo.' using errcode = 'P0001';
+    end if;
+  end loop;
+  return new;
+end $$;
+create trigger daily_logs_guard before insert or update on public.daily_logs for each row execute function public.guard_daily_log();
+
+-- Founding-list signups from the public pricing page. Written only by the server (service role).
+create table public.leads (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 200),
+  company text not null check (char_length(company) between 1 and 200),
+  email text not null check (char_length(email) <= 320),
+  phone text check (char_length(phone) <= 40),
+  tier text check (char_length(tier) <= 40),
+  billing text check (billing in ('monthly', 'annual')),
+  created_at timestamptz not null default now()
+);
+alter table public.leads enable row level security;
+revoke all on public.leads from anon, authenticated;
+
+revoke execute on function public.estimate_defaults(), public.guard_daily_log(),
+  public.save_estimate_items(uuid, jsonb, numeric) from anon, public;
+grant execute on function public.save_estimate_items(uuid, jsonb, numeric) to authenticated;

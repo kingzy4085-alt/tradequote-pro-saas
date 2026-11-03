@@ -12,7 +12,7 @@ Operations software for Canadian industrial and electrical contractors: estimati
 
 ## Set up
 
-1. **Supabase** — create a new project. In the SQL editor, run [`supabase/migrations/20261101000000_saas_core.sql`](supabase/migrations/20261101000000_saas_core.sql). It is the baseline schema for a **fresh** project (the old scripts in `database/legacy/` are kept for reference only — don't run them).
+1. **Supabase** — create a new project. In the SQL editor, run [`supabase/migrations/20261101000000_saas_core.sql`](supabase/migrations/20261101000000_saas_core.sql). It is the baseline schema for a **fresh** project (the old scripts in `database/legacy/` are kept for reference only — don't run them). Then run [`supabase/migrations/20261101000100_job_photos_storage.sql`](supabase/migrations/20261101000100_job_photos_storage.sql) for the private job-photo storage.
    - Auth → URL configuration: set the Site URL to your app URL and add `https://YOUR-DOMAIN/auth/callback` to the redirect URLs.
    - Auth → Email: keep "Confirm email" on, and set up custom SMTP before launch (Supabase's built-in sender is rate limited).
 2. **Stripe** — create a Product with a recurring monthly **CAD** Price and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.

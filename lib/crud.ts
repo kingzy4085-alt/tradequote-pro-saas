@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getModule, type ModuleDef } from '@/lib/modules';
 import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
 import { parseRecord, uuidSchema } from '@/lib/validation';
+import { JOB_PHOTOS_BUCKET } from '@/lib/daily-log';
 
 const MAX_LIMIT = 200;
 
@@ -99,8 +100,17 @@ export async function deleteRecord(_request: Request, { params }: Params) {
   const ctx = await requireApi({ minRank: mod.remove });
   if (ctx instanceof Response) return ctx;
 
-  const { data, error } = await ctx.supabase.from(mod.table).delete().eq('id', params.id!).select('id');
+  const hasPhotos = mod.slug === 'daily-logs';
+  const { data, error } = await ctx.supabase.from(mod.table).delete().eq('id', params.id!).select(hasPhotos ? 'id, photos' : 'id');
   if (error) return dbError(error, `deleting from ${mod.label}`);
   if (!data?.length) return jsonError(404, 'Not found');
+  // Daily log photos live in storage, not the row; remove them with the log
+  if (hasPhotos) {
+    const photos = ((data[0] as { photos?: unknown }).photos ?? []) as string[];
+    if (photos.length) {
+      const { error: storageError } = await ctx.supabase.storage.from(JOB_PHOTOS_BUCKET).remove(photos);
+      if (storageError) console.error('Could not remove daily log photos', storageError);
+    }
+  }
   return NextResponse.json({ ok: true });
 }

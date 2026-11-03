@@ -6,6 +6,9 @@ import { Alert, Badge, Button, FieldError, Input, Label, PageHeader, Panel, Sele
 import { formatValue } from '@/lib/format';
 import { getModule, type FieldDef } from '@/lib/modules';
 
+// Modules with their own detail page (line items, photos, sign-off); the row title opens it
+const DETAIL_PAGES = new Set(['estimates', 'daily-logs']);
+
 type Row = Record<string, unknown> & { id: string; title: string; status: string; created_at: string };
 type FormState = Record<string, string | boolean>;
 
@@ -246,7 +249,15 @@ export default function ModulePage({ slug, canWrite, canDelete }: { slug: string
               ) : (
                 rows.map((row) => (
                   <tr key={row.id} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="p-4 font-medium text-white">{row.title}</td>
+                    <td className="p-4 font-medium text-white">
+                      {DETAIL_PAGES.has(slug) ? (
+                        <Link href={`/${slug}/${row.id}`} className="hover:text-amber-400 hover:underline">
+                          {row.title}
+                        </Link>
+                      ) : (
+                        row.title
+                      )}
+                    </td>
                     {listColumns.map((c) => (
                       <td key={c.key} className="p-4 text-slate-300">
                         {formatValue(c.type, row[c.key])}
