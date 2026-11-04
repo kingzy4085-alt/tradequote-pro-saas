@@ -11,4 +11,7 @@ export const SQL_TYPE: Record<FieldType, string> = {
   money: 'numeric(14,2)',
   date: 'date',
   boolean: 'boolean',
+  project: 'uuid',
+  client: 'uuid',
+  uuid: 'uuid',
 };

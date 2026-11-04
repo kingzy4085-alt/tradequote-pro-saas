@@ -11,20 +11,15 @@ export function createSupabaseServerClient() {
   const cookieStore = cookies();
   return createServerClient(env.supabaseUrl(), env.supabaseAnonKey(), {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
+      setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
         try {
-          cookieStore.set({ name, value, ...options });
+          for (const { name, value, options } of cookies) cookieStore.set(name, value, options);
         } catch {
           // Server components can't set cookies; middleware refreshes the session instead.
         }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {}
       },
     },
   });
@@ -32,7 +27,7 @@ export function createSupabaseServerClient() {
 
 /**
  * Service-role client that BYPASSES row level security. Only for the Stripe webhook,
- * billing customer records and sending invites — never with user-supplied filters.
+ * billing customer records, sending invites, leads and cron jobs — never with user-supplied filters.
  */
 export function createSupabaseAdminClient() {
   return createClient(env.supabaseUrl(), env.supabaseServiceRoleKey(), {

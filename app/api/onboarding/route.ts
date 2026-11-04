@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { jsonError, readJson } from '@/lib/api';
 import { PROVINCES } from '@/lib/provinces';
+import { consumeUserRateLimit } from '@/lib/rate-limit';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
   }
   if (!parsed.success) return jsonError(400, parsed.error.issues[0]?.message ?? 'Invalid request');
   const body = parsed.data;
+
+  if (!(await consumeUserRateLimit(supabase, 'onboarding'))) return jsonError(429, 'Too many attempts. Try again in an hour.');
 
   const { error } =
     body.action === 'create'

@@ -1,37 +1,33 @@
 import { notFound, redirect } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { formatMoney, formatValue } from '@/lib/format';
 import { getModule } from '@/lib/modules';
+import { Letterhead, loadLetterhead } from '@/lib/print';
 import { hasRank } from '@/lib/roles';
 import { uuidSchema } from '@/lib/validation';
-import PrintButton from './print-button';
+import PrintButton from '@/components/print-button';
 
 export const dynamic = 'force-dynamic';
 
 export default async function PrintProposal({ params }: { params: { id: string } }) {
   if (!uuidSchema.safeParse(params.id).success) notFound();
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status === 'signed-out') redirect('/login');
   if (result.status !== 'ok') redirect('/onboarding');
   const { ctx } = result;
   if (!hasRank(ctx.role, getModule('proposals')!.read)) notFound();
 
-  const { data: p } = await ctx.supabase.from('proposals').select('*').eq('id', params.id).maybeSingle();
+  const [{ data: p }, company] = await Promise.all([ctx.supabase.from('proposals').select('*').eq('id', params.id).maybeSingle(), loadLetterhead(ctx)]);
   if (!p) notFound();
+
+  const dates = [`Date: ${new Date(p.created_at).toLocaleDateString('en-CA')}`];
+  if (p.valid_until) dates.push(`Prices valid until: ${formatValue('date', p.valid_until)}`);
 
   return (
     <main className="min-h-screen bg-white text-black">
       <div className="max-w-4xl mx-auto p-8">
-        <div className="flex justify-between items-start border-b border-gray-300 pb-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">{ctx.company.name}</h1>
-            <p className="text-sm text-gray-600">Industrial & Commercial Electrical Contracting</p>
-          </div>
-          <div className="text-right">
-            <h2 className="text-xl font-semibold">PROPOSAL</h2>
-            <p className="text-sm text-gray-500">Date: {new Date(p.created_at).toLocaleDateString('en-CA')}</p>
-            {p.valid_until && <p className="text-sm text-gray-500">Prices valid until: {formatValue('date', p.valid_until)}</p>}
-          </div>
+        <div className="mb-6 text-sm text-gray-600">
+          <Letterhead company={company} title="Proposal" details={dates} tagline="Industrial & Commercial Electrical Contracting" />
         </div>
 
         <section className="mb-6">

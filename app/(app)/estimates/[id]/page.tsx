@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { getModule } from '@/lib/modules';
 import { hasRank } from '@/lib/roles';
 import { uuidSchema } from '@/lib/validation';
@@ -10,7 +10,7 @@ export const metadata = { title: 'Estimate · TradeQuote PRO' };
 
 export default async function EstimatePage({ params }: { params: { id: string } }) {
   if (!uuidSchema.safeParse(params.id).success) notFound();
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') notFound();
   const { ctx } = result;
   const mod = getModule('estimates')!;

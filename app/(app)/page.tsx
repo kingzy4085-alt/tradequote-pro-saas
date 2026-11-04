@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonLink, Panel, StatCard } from '@/components/ui';
-import { getContext, type AppContext } from '@/lib/context';
+import { getPageContext, type AppContext } from '@/lib/context';
 import { formatMoney } from '@/lib/format';
 import { MODULE_GROUPS, MODULES, getModule } from '@/lib/modules';
 import { hasRank } from '@/lib/roles';
@@ -63,7 +63,7 @@ async function pipelineValue(ctx: AppContext): Promise<number | null> {
 }
 
 export default async function CommandCenter() {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') redirect('/login');
   const { ctx } = result;
 

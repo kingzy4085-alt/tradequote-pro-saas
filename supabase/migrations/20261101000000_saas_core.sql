@@ -26,6 +26,8 @@ create table public.companies (
   default_tax numeric(6,2) not null default 5 check (default_tax between 0 and 100),
   default_labour_rate numeric(10,2) not null default 0 check (default_labour_rate between 0 and 100000),
   default_terms text check (char_length(default_terms) <= 10000),
+  overtime_multiplier numeric(5,2) not null default 1.5 check (overtime_multiplier between 1 and 10),
+  default_holdback_pct numeric(5,2) not null default 10 check (default_holdback_pct between 0 and 100),
   created_at timestamptz not null default now()
 );
 
@@ -229,7 +231,7 @@ create policy ai_usage_select on public.ai_usage for select to authenticated
 
 revoke all on public.companies, public.company_users, public.invitations, public.ai_usage, public.stripe_events from anon, authenticated;
 grant select on public.companies, public.company_users, public.ai_usage to authenticated;
-grant update (name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms)
+grant update (name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms, overtime_multiplier, default_holdback_pct)
   on public.companies to authenticated;
 grant select, insert, delete on public.invitations to authenticated;
 
@@ -252,6 +254,7 @@ create table public.daily_logs (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   log_date date,
   crew_lead text,
   weather text,
@@ -274,7 +277,7 @@ create policy daily_logs_update on public.daily_logs for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy daily_logs_delete on public.daily_logs for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.daily_logs from anon;
 grant select, insert, update, delete on public.daily_logs to authenticated;
 
@@ -286,6 +289,7 @@ create table public.field_logs (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   location text,
   author text,
   created_at timestamptz not null default now(),
@@ -302,7 +306,7 @@ create policy field_logs_update on public.field_logs for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy field_logs_delete on public.field_logs for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.field_logs from anon;
 grant select, insert, update, delete on public.field_logs to authenticated;
 
@@ -314,6 +318,7 @@ create table public.timecards (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   employee_name text not null,
   work_date date,
   regular_hours numeric,
@@ -332,7 +337,7 @@ create policy timecards_update on public.timecards for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write() and (public.user_rank() >= 3 or created_by = auth.uid()))
   with check (company_id = public.user_company_id());
 create policy timecards_delete on public.timecards for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3 and (public.user_rank() >= 3 or created_by = auth.uid()));
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write() and (public.user_rank() >= 3 or created_by = auth.uid()));
 revoke all on public.timecards from anon;
 grant select, insert, update, delete on public.timecards to authenticated;
 
@@ -344,6 +349,7 @@ create table public.crew_schedule (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   shift text,
   location text,
   start_date date,
@@ -362,7 +368,7 @@ create policy crew_schedule_update on public.crew_schedule for update to authent
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy crew_schedule_delete on public.crew_schedule for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.crew_schedule from anon;
 grant select, insert, update, delete on public.crew_schedule to authenticated;
 
@@ -374,6 +380,7 @@ create table public.tailgate_logs (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   topic text,
   attendees_count numeric,
   meeting_date date,
@@ -391,7 +398,7 @@ create policy tailgate_logs_update on public.tailgate_logs for update to authent
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy tailgate_logs_delete on public.tailgate_logs for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.tailgate_logs from anon;
 grant select, insert, update, delete on public.tailgate_logs to authenticated;
 
@@ -403,6 +410,7 @@ create table public.safety_logs (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   incident_type text,
   severity text,
   incident_date date,
@@ -420,7 +428,7 @@ create policy safety_logs_update on public.safety_logs for update to authenticat
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy safety_logs_delete on public.safety_logs for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.safety_logs from anon;
 grant select, insert, update, delete on public.safety_logs to authenticated;
 
@@ -432,6 +440,7 @@ create table public.loto_permits (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   equipment_isolated text not null,
   authorized_person text not null,
   lock_number text,
@@ -449,7 +458,7 @@ create policy loto_permits_update on public.loto_permits for update to authentic
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy loto_permits_delete on public.loto_permits for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.loto_permits from anon;
 grant select, insert, update, delete on public.loto_permits to authenticated;
 
@@ -461,6 +470,7 @@ create table public.inspections (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   inspector text,
   inspection_date date,
   permit_number text,
@@ -478,7 +488,7 @@ create policy inspections_update on public.inspections for update to authenticat
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy inspections_delete on public.inspections for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.inspections from anon;
 grant select, insert, update, delete on public.inspections to authenticated;
 
@@ -490,6 +500,7 @@ create table public.punch_list (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   project_name text,
   assigned_trade text,
   priority text,
@@ -509,7 +520,7 @@ create policy punch_list_update on public.punch_list for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy punch_list_delete on public.punch_list for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.punch_list from anon;
 grant select, insert, update, delete on public.punch_list to authenticated;
 
@@ -538,7 +549,7 @@ create policy tool_crib_update on public.tool_crib for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy tool_crib_delete on public.tool_crib for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.tool_crib from anon;
 grant select, insert, update, delete on public.tool_crib to authenticated;
 
@@ -568,7 +579,7 @@ create policy crm_update on public.crm for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy crm_delete on public.crm for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.crm from anon;
 grant select, insert, update, delete on public.crm to authenticated;
 
@@ -580,6 +591,8 @@ create table public.estimates (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
+  client_id uuid,
   client_name text,
   client_address text,
   bid_due date,
@@ -603,7 +616,7 @@ create policy estimates_update on public.estimates for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy estimates_delete on public.estimates for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.estimates from anon;
 grant select, insert, update, delete on public.estimates to authenticated;
 
@@ -615,6 +628,8 @@ create table public.proposals (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
+  client_id uuid,
   client_name text,
   total_amount numeric(14,2),
   valid_until date,
@@ -634,7 +649,7 @@ create policy proposals_update on public.proposals for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy proposals_delete on public.proposals for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.proposals from anon;
 grant select, insert, update, delete on public.proposals to authenticated;
 
@@ -663,7 +678,7 @@ create policy rfq_update on public.rfq for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy rfq_delete on public.rfq for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.rfq from anon;
 grant select, insert, update, delete on public.rfq to authenticated;
 
@@ -692,7 +707,7 @@ create policy rfp_update on public.rfp for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy rfp_delete on public.rfp for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.rfp from anon;
 grant select, insert, update, delete on public.rfp to authenticated;
 
@@ -704,6 +719,7 @@ create table public.projects (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  client_id uuid,
   client_name text,
   site text,
   start_date date,
@@ -723,7 +739,7 @@ create policy projects_update on public.projects for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy projects_delete on public.projects for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.projects from anon;
 grant select, insert, update, delete on public.projects to authenticated;
 
@@ -735,6 +751,7 @@ create table public.rfis (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   rfi_number text,
   assignee text,
   due_date date,
@@ -752,7 +769,7 @@ create policy rfis_update on public.rfis for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy rfis_delete on public.rfis for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.rfis from anon;
 grant select, insert, update, delete on public.rfis to authenticated;
 
@@ -764,6 +781,7 @@ create table public.change_orders (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   project_name text,
   cost_impact numeric(14,2),
   days_impact numeric,
@@ -781,7 +799,7 @@ create policy change_orders_update on public.change_orders for update to authent
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy change_orders_delete on public.change_orders for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.change_orders from anon;
 grant select, insert, update, delete on public.change_orders to authenticated;
 
@@ -793,6 +811,7 @@ create table public.submittals (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   submittal_number text,
   spec_section text,
   created_at timestamptz not null default now(),
@@ -809,7 +828,7 @@ create policy submittals_update on public.submittals for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy submittals_delete on public.submittals for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.submittals from anon;
 grant select, insert, update, delete on public.submittals to authenticated;
 
@@ -821,6 +840,7 @@ create table public.drawings (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   drawing_number text,
   revision text,
   issued_date date,
@@ -838,7 +858,7 @@ create policy drawings_update on public.drawings for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy drawings_delete on public.drawings for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.drawings from anon;
 grant select, insert, update, delete on public.drawings to authenticated;
 
@@ -850,6 +870,7 @@ create table public.documents (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   category text,
   version text,
   created_at timestamptz not null default now(),
@@ -866,7 +887,7 @@ create policy documents_update on public.documents for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy documents_delete on public.documents for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.documents from anon;
 grant select, insert, update, delete on public.documents to authenticated;
 
@@ -880,6 +901,7 @@ create table public.site_vault (
   notes text,
   document_type text,
   confidentiality text,
+  expiry_date date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -894,7 +916,7 @@ create policy site_vault_update on public.site_vault for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy site_vault_delete on public.site_vault for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.site_vault from anon;
 grant select, insert, update, delete on public.site_vault to authenticated;
 
@@ -906,6 +928,7 @@ create table public.commissioning (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   equipment_tag text,
   system_type text,
   created_at timestamptz not null default now(),
@@ -922,7 +945,7 @@ create policy commissioning_update on public.commissioning for update to authent
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy commissioning_delete on public.commissioning for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.commissioning from anon;
 grant select, insert, update, delete on public.commissioning to authenticated;
 
@@ -934,6 +957,7 @@ create table public.cable_testing (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   cable_tag text,
   test_voltage text,
   reading text,
@@ -951,7 +975,7 @@ create policy cable_testing_update on public.cable_testing for update to authent
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy cable_testing_delete on public.cable_testing for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.cable_testing from anon;
 grant select, insert, update, delete on public.cable_testing to authenticated;
 
@@ -963,6 +987,7 @@ create table public.quality_control (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   checked_by text,
   check_date date,
   created_at timestamptz not null default now(),
@@ -979,7 +1004,7 @@ create policy quality_control_update on public.quality_control for update to aut
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy quality_control_delete on public.quality_control for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.quality_control from anon;
 grant select, insert, update, delete on public.quality_control to authenticated;
 
@@ -991,6 +1016,7 @@ create table public.non_conformance (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   disposition text,
   raised_by text,
   created_at timestamptz not null default now(),
@@ -1007,7 +1033,7 @@ create policy non_conformance_update on public.non_conformance for update to aut
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy non_conformance_delete on public.non_conformance for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.non_conformance from anon;
 grant select, insert, update, delete on public.non_conformance to authenticated;
 
@@ -1035,7 +1061,7 @@ create policy defect_liability_update on public.defect_liability for update to a
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy defect_liability_delete on public.defect_liability for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.defect_liability from anon;
 grant select, insert, update, delete on public.defect_liability to authenticated;
 
@@ -1063,7 +1089,7 @@ create policy warranty_update on public.warranty for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy warranty_delete on public.warranty for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.warranty from anon;
 grant select, insert, update, delete on public.warranty to authenticated;
 
@@ -1075,6 +1101,7 @@ create table public.tasks (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   assigned_to text,
   due_date date,
   created_at timestamptz not null default now(),
@@ -1091,7 +1118,7 @@ create policy tasks_update on public.tasks for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 1 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy tasks_delete on public.tasks for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 2);
+  using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write());
 revoke all on public.tasks from anon;
 grant select, insert, update, delete on public.tasks to authenticated;
 
@@ -1103,6 +1130,7 @@ create table public.job_costing (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   budget numeric(14,2),
   actual_cost numeric(14,2),
   created_at timestamptz not null default now(),
@@ -1119,7 +1147,7 @@ create policy job_costing_update on public.job_costing for update to authenticat
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy job_costing_delete on public.job_costing for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.job_costing from anon;
 grant select, insert, update, delete on public.job_costing to authenticated;
 
@@ -1131,9 +1159,11 @@ create table public.progress_billing (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   billing_period text,
   amount_billed numeric(14,2),
   holdback_percent numeric,
+  holdback_release_date date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1148,7 +1178,7 @@ create policy progress_billing_update on public.progress_billing for update to a
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy progress_billing_delete on public.progress_billing for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.progress_billing from anon;
 grant select, insert, update, delete on public.progress_billing to authenticated;
 
@@ -1160,6 +1190,8 @@ create table public.invoices (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
+  client_id uuid,
   client_name text,
   amount numeric(14,2),
   gst numeric(14,2),
@@ -1178,7 +1210,7 @@ create policy invoices_update on public.invoices for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy invoices_delete on public.invoices for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.invoices from anon;
 grant select, insert, update, delete on public.invoices to authenticated;
 
@@ -1190,6 +1222,7 @@ create table public.receivables (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   client_name text,
   amount numeric(14,2),
   due_date date,
@@ -1207,7 +1240,7 @@ create policy receivables_update on public.receivables for update to authenticat
   using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy receivables_delete on public.receivables for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.receivables from anon;
 grant select, insert, update, delete on public.receivables to authenticated;
 
@@ -1219,9 +1252,11 @@ create table public.payables (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   vendor text,
   amount numeric(14,2),
   due_date date,
+  purchase_order_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1236,7 +1271,7 @@ create policy payables_update on public.payables for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy payables_delete on public.payables for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.payables from anon;
 grant select, insert, update, delete on public.payables to authenticated;
 
@@ -1248,6 +1283,7 @@ create table public.purchase_orders (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   vendor text,
   project_name text,
   amount numeric(14,2),
@@ -1266,7 +1302,7 @@ create policy purchase_orders_update on public.purchase_orders for update to aut
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy purchase_orders_delete on public.purchase_orders for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.purchase_orders from anon;
 grant select, insert, update, delete on public.purchase_orders to authenticated;
 
@@ -1283,6 +1319,7 @@ create table public.vendors (
   phone text,
   email text,
   insurance_expiry date,
+  wcb_clearance_expiry date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1297,7 +1334,7 @@ create policy vendors_update on public.vendors for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy vendors_delete on public.vendors for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.vendors from anon;
 grant select, insert, update, delete on public.vendors to authenticated;
 
@@ -1314,6 +1351,7 @@ create table public.sub_compliance (
   liability_expiry date,
   safety_cert_verified boolean,
   contact_person text,
+  wcb_clearance_expiry date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1328,7 +1366,7 @@ create policy sub_compliance_update on public.sub_compliance for update to authe
   using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy sub_compliance_delete on public.sub_compliance for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.sub_compliance from anon;
 grant select, insert, update, delete on public.sub_compliance to authenticated;
 
@@ -1344,6 +1382,7 @@ create table public.employees (
   phone text,
   email text,
   ticket_expiry date,
+  hourly_cost numeric(14,2),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1358,7 +1397,7 @@ create policy employees_update on public.employees for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy employees_delete on public.employees for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.employees from anon;
 grant select, insert, update, delete on public.employees to authenticated;
 
@@ -1387,7 +1426,7 @@ create policy hiring_update on public.hiring for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy hiring_delete on public.hiring for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 4);
+  using (company_id = public.user_company_id() and public.user_rank() >= 4 and public.company_can_write());
 revoke all on public.hiring from anon;
 grant select, insert, update, delete on public.hiring to authenticated;
 
@@ -1416,7 +1455,7 @@ create policy equipment_update on public.equipment for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy equipment_delete on public.equipment for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.equipment from anon;
 grant select, insert, update, delete on public.equipment to authenticated;
 
@@ -1428,6 +1467,7 @@ create table public.equipment_rentals (
   title text not null check (char_length(title) between 1 and 300),
   status text not null,
   notes text,
+  project_id uuid,
   supplier text,
   daily_rate numeric(14,2),
   off_rent_date date,
@@ -1445,7 +1485,7 @@ create policy equipment_rentals_update on public.equipment_rentals for update to
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy equipment_rentals_delete on public.equipment_rentals for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.equipment_rentals from anon;
 grant select, insert, update, delete on public.equipment_rentals to authenticated;
 
@@ -1460,6 +1500,8 @@ create table public.fleet (
   unit_number text,
   plate text,
   mileage numeric,
+  next_service_date date,
+  next_service_km numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1474,7 +1516,7 @@ create policy fleet_update on public.fleet for update to authenticated
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy fleet_delete on public.fleet for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.fleet from anon;
 grant select, insert, update, delete on public.fleet to authenticated;
 
@@ -1503,7 +1545,7 @@ create policy maintenance_update on public.maintenance for update to authenticat
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy maintenance_delete on public.maintenance for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.maintenance from anon;
 grant select, insert, update, delete on public.maintenance to authenticated;
 
@@ -1518,6 +1560,7 @@ create table public.warehouse_inventory (
   sku text,
   quantity numeric,
   bin text,
+  reorder_point numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1532,9 +1575,393 @@ create policy warehouse_inventory_update on public.warehouse_inventory for updat
   using (company_id = public.user_company_id() and public.user_rank() >= 2 and public.company_can_write())
   with check (company_id = public.user_company_id());
 create policy warehouse_inventory_delete on public.warehouse_inventory for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= 3);
+  using (company_id = public.user_company_id() and public.user_rank() >= 3 and public.company_can_write());
 revoke all on public.warehouse_inventory from anon;
 grant select, insert, update, delete on public.warehouse_inventory to authenticated;
+
+-- Links between records -------------------------------------------------------
+-- Rejects a link to a record in another company. It also answers for ids that don't exist,
+-- with the same message, so nobody can probe which ids are real. An update checks against
+-- the row's stored company: company_id can't change, but this trigger may run before the
+-- one that restores it.
+create or replace function public.check_same_company() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_id uuid := (to_jsonb(new) ->> tg_argv[0])::uuid;
+  v_company uuid := case when tg_op = 'UPDATE' then old.company_id else new.company_id end;
+  v_found boolean;
+begin
+  execute format('select exists (select 1 from public.%I where id = $1 and company_id = $2)', tg_argv[1])
+    into v_found using v_id, v_company;
+  if not v_found then
+    raise exception 'That % was not found. Pick one from the list.', tg_argv[2] using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.check_same_company() from public, anon, authenticated;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'daily_logs_project_id_fkey' and conrelid = 'public.daily_logs'::regclass) then
+    alter table public.daily_logs add constraint daily_logs_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists daily_logs_project_id_idx on public.daily_logs(project_id);
+drop trigger if exists daily_logs_project_id_company on public.daily_logs;
+create trigger daily_logs_project_id_company before insert or update on public.daily_logs for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'field_logs_project_id_fkey' and conrelid = 'public.field_logs'::regclass) then
+    alter table public.field_logs add constraint field_logs_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists field_logs_project_id_idx on public.field_logs(project_id);
+drop trigger if exists field_logs_project_id_company on public.field_logs;
+create trigger field_logs_project_id_company before insert or update on public.field_logs for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'timecards_project_id_fkey' and conrelid = 'public.timecards'::regclass) then
+    alter table public.timecards add constraint timecards_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists timecards_project_id_idx on public.timecards(project_id);
+drop trigger if exists timecards_project_id_company on public.timecards;
+create trigger timecards_project_id_company before insert or update on public.timecards for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'crew_schedule_project_id_fkey' and conrelid = 'public.crew_schedule'::regclass) then
+    alter table public.crew_schedule add constraint crew_schedule_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists crew_schedule_project_id_idx on public.crew_schedule(project_id);
+drop trigger if exists crew_schedule_project_id_company on public.crew_schedule;
+create trigger crew_schedule_project_id_company before insert or update on public.crew_schedule for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tailgate_logs_project_id_fkey' and conrelid = 'public.tailgate_logs'::regclass) then
+    alter table public.tailgate_logs add constraint tailgate_logs_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists tailgate_logs_project_id_idx on public.tailgate_logs(project_id);
+drop trigger if exists tailgate_logs_project_id_company on public.tailgate_logs;
+create trigger tailgate_logs_project_id_company before insert or update on public.tailgate_logs for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'safety_logs_project_id_fkey' and conrelid = 'public.safety_logs'::regclass) then
+    alter table public.safety_logs add constraint safety_logs_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists safety_logs_project_id_idx on public.safety_logs(project_id);
+drop trigger if exists safety_logs_project_id_company on public.safety_logs;
+create trigger safety_logs_project_id_company before insert or update on public.safety_logs for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'loto_permits_project_id_fkey' and conrelid = 'public.loto_permits'::regclass) then
+    alter table public.loto_permits add constraint loto_permits_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists loto_permits_project_id_idx on public.loto_permits(project_id);
+drop trigger if exists loto_permits_project_id_company on public.loto_permits;
+create trigger loto_permits_project_id_company before insert or update on public.loto_permits for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'inspections_project_id_fkey' and conrelid = 'public.inspections'::regclass) then
+    alter table public.inspections add constraint inspections_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists inspections_project_id_idx on public.inspections(project_id);
+drop trigger if exists inspections_project_id_company on public.inspections;
+create trigger inspections_project_id_company before insert or update on public.inspections for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'punch_list_project_id_fkey' and conrelid = 'public.punch_list'::regclass) then
+    alter table public.punch_list add constraint punch_list_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists punch_list_project_id_idx on public.punch_list(project_id);
+drop trigger if exists punch_list_project_id_company on public.punch_list;
+create trigger punch_list_project_id_company before insert or update on public.punch_list for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'estimates_project_id_fkey' and conrelid = 'public.estimates'::regclass) then
+    alter table public.estimates add constraint estimates_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists estimates_project_id_idx on public.estimates(project_id);
+drop trigger if exists estimates_project_id_company on public.estimates;
+create trigger estimates_project_id_company before insert or update on public.estimates for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'estimates_client_id_fkey' and conrelid = 'public.estimates'::regclass) then
+    alter table public.estimates add constraint estimates_client_id_fkey foreign key (client_id) references public.crm(id) on delete set null;
+  end if;
+end $$;
+create index if not exists estimates_client_id_idx on public.estimates(client_id);
+drop trigger if exists estimates_client_id_company on public.estimates;
+create trigger estimates_client_id_company before insert or update on public.estimates for each row when (new.client_id is not null)
+  execute function public.check_same_company('client_id', 'crm', 'client');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'proposals_project_id_fkey' and conrelid = 'public.proposals'::regclass) then
+    alter table public.proposals add constraint proposals_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists proposals_project_id_idx on public.proposals(project_id);
+drop trigger if exists proposals_project_id_company on public.proposals;
+create trigger proposals_project_id_company before insert or update on public.proposals for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'proposals_client_id_fkey' and conrelid = 'public.proposals'::regclass) then
+    alter table public.proposals add constraint proposals_client_id_fkey foreign key (client_id) references public.crm(id) on delete set null;
+  end if;
+end $$;
+create index if not exists proposals_client_id_idx on public.proposals(client_id);
+drop trigger if exists proposals_client_id_company on public.proposals;
+create trigger proposals_client_id_company before insert or update on public.proposals for each row when (new.client_id is not null)
+  execute function public.check_same_company('client_id', 'crm', 'client');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'projects_client_id_fkey' and conrelid = 'public.projects'::regclass) then
+    alter table public.projects add constraint projects_client_id_fkey foreign key (client_id) references public.crm(id) on delete set null;
+  end if;
+end $$;
+create index if not exists projects_client_id_idx on public.projects(client_id);
+drop trigger if exists projects_client_id_company on public.projects;
+create trigger projects_client_id_company before insert or update on public.projects for each row when (new.client_id is not null)
+  execute function public.check_same_company('client_id', 'crm', 'client');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'rfis_project_id_fkey' and conrelid = 'public.rfis'::regclass) then
+    alter table public.rfis add constraint rfis_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists rfis_project_id_idx on public.rfis(project_id);
+drop trigger if exists rfis_project_id_company on public.rfis;
+create trigger rfis_project_id_company before insert or update on public.rfis for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'change_orders_project_id_fkey' and conrelid = 'public.change_orders'::regclass) then
+    alter table public.change_orders add constraint change_orders_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists change_orders_project_id_idx on public.change_orders(project_id);
+drop trigger if exists change_orders_project_id_company on public.change_orders;
+create trigger change_orders_project_id_company before insert or update on public.change_orders for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'submittals_project_id_fkey' and conrelid = 'public.submittals'::regclass) then
+    alter table public.submittals add constraint submittals_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists submittals_project_id_idx on public.submittals(project_id);
+drop trigger if exists submittals_project_id_company on public.submittals;
+create trigger submittals_project_id_company before insert or update on public.submittals for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'drawings_project_id_fkey' and conrelid = 'public.drawings'::regclass) then
+    alter table public.drawings add constraint drawings_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists drawings_project_id_idx on public.drawings(project_id);
+drop trigger if exists drawings_project_id_company on public.drawings;
+create trigger drawings_project_id_company before insert or update on public.drawings for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'documents_project_id_fkey' and conrelid = 'public.documents'::regclass) then
+    alter table public.documents add constraint documents_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists documents_project_id_idx on public.documents(project_id);
+drop trigger if exists documents_project_id_company on public.documents;
+create trigger documents_project_id_company before insert or update on public.documents for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'commissioning_project_id_fkey' and conrelid = 'public.commissioning'::regclass) then
+    alter table public.commissioning add constraint commissioning_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists commissioning_project_id_idx on public.commissioning(project_id);
+drop trigger if exists commissioning_project_id_company on public.commissioning;
+create trigger commissioning_project_id_company before insert or update on public.commissioning for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'cable_testing_project_id_fkey' and conrelid = 'public.cable_testing'::regclass) then
+    alter table public.cable_testing add constraint cable_testing_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists cable_testing_project_id_idx on public.cable_testing(project_id);
+drop trigger if exists cable_testing_project_id_company on public.cable_testing;
+create trigger cable_testing_project_id_company before insert or update on public.cable_testing for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'quality_control_project_id_fkey' and conrelid = 'public.quality_control'::regclass) then
+    alter table public.quality_control add constraint quality_control_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists quality_control_project_id_idx on public.quality_control(project_id);
+drop trigger if exists quality_control_project_id_company on public.quality_control;
+create trigger quality_control_project_id_company before insert or update on public.quality_control for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'non_conformance_project_id_fkey' and conrelid = 'public.non_conformance'::regclass) then
+    alter table public.non_conformance add constraint non_conformance_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists non_conformance_project_id_idx on public.non_conformance(project_id);
+drop trigger if exists non_conformance_project_id_company on public.non_conformance;
+create trigger non_conformance_project_id_company before insert or update on public.non_conformance for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'tasks_project_id_fkey' and conrelid = 'public.tasks'::regclass) then
+    alter table public.tasks add constraint tasks_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists tasks_project_id_idx on public.tasks(project_id);
+drop trigger if exists tasks_project_id_company on public.tasks;
+create trigger tasks_project_id_company before insert or update on public.tasks for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'job_costing_project_id_fkey' and conrelid = 'public.job_costing'::regclass) then
+    alter table public.job_costing add constraint job_costing_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists job_costing_project_id_idx on public.job_costing(project_id);
+drop trigger if exists job_costing_project_id_company on public.job_costing;
+create trigger job_costing_project_id_company before insert or update on public.job_costing for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'progress_billing_project_id_fkey' and conrelid = 'public.progress_billing'::regclass) then
+    alter table public.progress_billing add constraint progress_billing_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists progress_billing_project_id_idx on public.progress_billing(project_id);
+drop trigger if exists progress_billing_project_id_company on public.progress_billing;
+create trigger progress_billing_project_id_company before insert or update on public.progress_billing for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'invoices_project_id_fkey' and conrelid = 'public.invoices'::regclass) then
+    alter table public.invoices add constraint invoices_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists invoices_project_id_idx on public.invoices(project_id);
+drop trigger if exists invoices_project_id_company on public.invoices;
+create trigger invoices_project_id_company before insert or update on public.invoices for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'invoices_client_id_fkey' and conrelid = 'public.invoices'::regclass) then
+    alter table public.invoices add constraint invoices_client_id_fkey foreign key (client_id) references public.crm(id) on delete set null;
+  end if;
+end $$;
+create index if not exists invoices_client_id_idx on public.invoices(client_id);
+drop trigger if exists invoices_client_id_company on public.invoices;
+create trigger invoices_client_id_company before insert or update on public.invoices for each row when (new.client_id is not null)
+  execute function public.check_same_company('client_id', 'crm', 'client');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'receivables_project_id_fkey' and conrelid = 'public.receivables'::regclass) then
+    alter table public.receivables add constraint receivables_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists receivables_project_id_idx on public.receivables(project_id);
+drop trigger if exists receivables_project_id_company on public.receivables;
+create trigger receivables_project_id_company before insert or update on public.receivables for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'payables_project_id_fkey' and conrelid = 'public.payables'::regclass) then
+    alter table public.payables add constraint payables_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists payables_project_id_idx on public.payables(project_id);
+drop trigger if exists payables_project_id_company on public.payables;
+create trigger payables_project_id_company before insert or update on public.payables for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'payables_purchase_order_id_fkey' and conrelid = 'public.payables'::regclass) then
+    alter table public.payables add constraint payables_purchase_order_id_fkey foreign key (purchase_order_id) references public.purchase_orders(id) on delete set null;
+  end if;
+end $$;
+create index if not exists payables_purchase_order_id_idx on public.payables(purchase_order_id);
+drop trigger if exists payables_purchase_order_id_company on public.payables;
+create trigger payables_purchase_order_id_company before insert or update on public.payables for each row when (new.purchase_order_id is not null)
+  execute function public.check_same_company('purchase_order_id', 'purchase_orders', 'purchase order');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'purchase_orders_project_id_fkey' and conrelid = 'public.purchase_orders'::regclass) then
+    alter table public.purchase_orders add constraint purchase_orders_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists purchase_orders_project_id_idx on public.purchase_orders(project_id);
+drop trigger if exists purchase_orders_project_id_company on public.purchase_orders;
+create trigger purchase_orders_project_id_company before insert or update on public.purchase_orders for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'equipment_rentals_project_id_fkey' and conrelid = 'public.equipment_rentals'::regclass) then
+    alter table public.equipment_rentals add constraint equipment_rentals_project_id_fkey foreign key (project_id) references public.projects(id) on delete set null;
+  end if;
+end $$;
+create index if not exists equipment_rentals_project_id_idx on public.equipment_rentals(project_id);
+drop trigger if exists equipment_rentals_project_id_company on public.equipment_rentals;
+create trigger equipment_rentals_project_id_company before insert or update on public.equipment_rentals for each row when (new.project_id is not null)
+  execute function public.check_same_company('project_id', 'projects', 'project');
 
 -- Features ----------------------------------------------------------------------
 

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Alert, AuthCard, Button, Input, Label } from '@/components/ui';
+import { safeNext } from '@/lib/safe-redirect';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 export default function UpdatePasswordPage() {
@@ -20,7 +21,8 @@ export default function UpdatePasswordPage() {
     const { error } = await getSupabaseBrowserClient().auth.updateUser({ password });
     setLoading(false);
     if (error) return setError(error.message);
-    router.replace('/');
+    // Invited people carry on to accepting their invitation
+    router.replace(safeNext(new URLSearchParams(window.location.search).get('next')));
     router.refresh();
   }
 

@@ -2,7 +2,7 @@
 // fields, its statuses and who may read, write and delete it. The API, the
 // shared module page and the database migration (checked by tests) all follow it.
 
-export type FieldType = 'text' | 'textarea' | 'number' | 'money' | 'date' | 'select' | 'boolean' | 'email' | 'tel';
+export type FieldType = 'text' | 'textarea' | 'number' | 'money' | 'date' | 'select' | 'boolean' | 'email' | 'tel' | 'project' | 'client' | 'uuid';
 
 export interface FieldDef {
   key: string;
@@ -11,6 +11,12 @@ export interface FieldDef {
   options?: string[];
   placeholder?: string;
   required?: boolean;
+  /** Owned by the system (a trigger or RPC): parseRecord strips it and forms show it read-only. */
+  computed?: boolean;
+  /** Left out of the generic form and list. The API still accepts it unless it is also computed. */
+  hidden?: boolean;
+  /** For a 'uuid' field: the table it points to. 'project' and 'client' fields imply theirs. */
+  references?: string;
 }
 
 export type ModuleGroup = 'Field' | 'Estimating & Sales' | 'Project Controls' | 'Finance' | 'Resources';
@@ -24,7 +30,11 @@ export interface ModuleDef {
   /** Label for the record's name, stored in `title`. */
   titleLabel: string;
   titlePlaceholder: string;
+  /** What one record is called on buttons and messages, when that differs from titleLabel (an estimate's title is its project). */
+  recordLabel?: string;
   statuses: string[];
+  /** Statuses only the system sets. Stay in `statuses` so lists can filter by them; users cannot pick them by hand. */
+  systemStatuses?: string[];
   fields: FieldDef[];
   /** Minimum role rank (see lib/roles.ts) to read, create/edit and delete. */
   read: number;
@@ -48,14 +58,20 @@ const field = (key: string, label: string, type: FieldType = 'text', extra: Part
   ...extra,
 });
 
+// Real links to the record they name. The free-text client_name and project_name
+// fields stay so older records and the print pages keep their wording.
+const projectField = field('project_id', 'Project', 'project');
+const clientField = field('client_id', 'Client', 'client');
+
 export const MODULES: ModuleDef[] = [
   // Field
   {
     slug: 'daily-logs', table: 'daily_logs', label: 'Daily Logs', group: 'Field',
     description: 'End-of-shift site reports: crew, weather, work done and delays.',
-    titleLabel: 'Log Title', titlePlaceholder: 'e.g. Unit 3 MCC tie-in, day 2',
+    titleLabel: 'Log Title', titlePlaceholder: 'e.g. Unit 3 MCC tie-in, day 2', recordLabel: 'Daily Log',
     statuses: ['Draft', 'Submitted', 'Reviewed'],
     fields: [
+      projectField,
       field('log_date', 'Date', 'date'),
       field('crew_lead', 'Crew Lead'),
       field('weather', 'Weather'),
@@ -72,15 +88,16 @@ export const MODULES: ModuleDef[] = [
     description: 'Quick notes from the field: issues, observations and photos to follow up.',
     titleLabel: 'Entry', titlePlaceholder: 'e.g. Cable tray blocked at grid C-4',
     statuses: ['Logged', 'Actioned', 'Closed'],
-    fields: [field('location', 'Location'), field('author', 'Author')],
+    fields: [projectField, field('location', 'Location'), field('author', 'Author')],
     read: CREW, write: CREW, remove: PM,
   },
   {
     slug: 'timecards', table: 'timecards', label: 'Timecards', group: 'Field',
     description: 'Hours by worker and job, with regular and overtime split.',
-    titleLabel: 'Job / Cost Code', titlePlaceholder: 'e.g. 24-118 Canola Plant — Labour',
+    titleLabel: 'Job / Cost Code', titlePlaceholder: 'e.g. 24-118 Canola Plant — Labour', recordLabel: 'Timecard',
     statuses: ['Submitted', 'Approved', 'Rejected', 'Exported'],
     fields: [
+      projectField,
       field('employee_name', 'Employee', 'text', { required: true }),
       field('work_date', 'Date', 'date'),
       field('regular_hours', 'Regular Hours', 'number'),
@@ -92,9 +109,9 @@ export const MODULES: ModuleDef[] = [
   {
     slug: 'crew-schedule', table: 'crew_schedule', label: 'Crew Schedule', group: 'Field',
     description: 'Who is on which site, which shift.',
-    titleLabel: 'Crew / Worker', titlePlaceholder: 'e.g. Crew A — Mike, Raj, Tessa',
+    titleLabel: 'Crew / Worker', titlePlaceholder: 'e.g. Crew A — Mike, Raj, Tessa', recordLabel: 'Schedule Entry',
     statuses: ['Scheduled', 'On Site', 'Complete', 'Cancelled'],
-    fields: [field('shift', 'Shift', 'select', { options: ['Days', 'Nights', 'Swing'] }), field('location', 'Site'), field('start_date', 'Start', 'date'), field('end_date', 'End', 'date')],
+    fields: [projectField, field('shift', 'Shift', 'select', { options: ['Days', 'Nights', 'Swing'] }), field('location', 'Site'), field('start_date', 'Start', 'date'), field('end_date', 'End', 'date')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -102,7 +119,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Toolbox talks and FLHAs with topic and attendance.',
     titleLabel: 'Meeting', titlePlaceholder: 'e.g. Morning FLHA — energized work near MCC',
     statuses: ['Completed', 'Needs Sign-off'],
-    fields: [field('topic', 'Topic'), field('attendees_count', 'Attendees', 'number'), field('meeting_date', 'Date', 'date')],
+    fields: [projectField, field('topic', 'Topic'), field('attendees_count', 'Attendees', 'number'), field('meeting_date', 'Date', 'date')],
     read: CREW, write: CREW, remove: PM,
   },
   {
@@ -111,6 +128,7 @@ export const MODULES: ModuleDef[] = [
     titleLabel: 'Incident', titlePlaceholder: 'e.g. Near miss — dropped conduit from lift',
     statuses: ['Open', 'Under Investigation', 'Resolved'],
     fields: [
+      projectField,
       field('incident_type', 'Type', 'select', { options: ['Near Miss', 'First Aid', 'Medical Aid', 'Lost Time', 'Property Damage', 'Hazard'] }),
       field('severity', 'Severity', 'select', { options: ['Low', 'Medium', 'High', 'Critical'] }),
       field('incident_date', 'Date', 'date'),
@@ -122,7 +140,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Lockout/tagout permits: equipment isolated, by whom, and when released.',
     titleLabel: 'Permit', titlePlaceholder: 'e.g. LOTO-0412 Conveyor 7 drive',
     statuses: ['Locked Out', 'Verified Zero Energy', 'Released'],
-    fields: [field('equipment_isolated', 'Equipment Isolated', 'text', { required: true }), field('authorized_person', 'Authorized Person', 'text', { required: true }), field('lock_number', 'Lock #')],
+    fields: [projectField, field('equipment_isolated', 'Equipment Isolated', 'text', { required: true }), field('authorized_person', 'Authorized Person', 'text', { required: true }), field('lock_number', 'Lock #')],
     read: CREW, write: CREW, remove: ADMIN,
   },
   {
@@ -130,7 +148,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Electrical, safety and authority inspections with outcome.',
     titleLabel: 'Inspection', titlePlaceholder: 'e.g. Rough-in inspection — Level 2',
     statuses: ['Scheduled', 'Passed', 'Failed', 'Re-inspect'],
-    fields: [field('inspector', 'Inspector'), field('inspection_date', 'Date', 'date'), field('permit_number', 'Permit #')],
+    fields: [projectField, field('inspector', 'Inspector'), field('inspection_date', 'Date', 'date'), field('permit_number', 'Permit #')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -139,7 +157,8 @@ export const MODULES: ModuleDef[] = [
     titleLabel: 'Item', titlePlaceholder: 'e.g. Missing cover plate, room 204',
     statuses: ['Open', 'In Progress', 'Ready for Review', 'Closed'],
     fields: [
-      field('project_name', 'Project'),
+      projectField,
+      field('project_name', 'Project Name (if not listed)'),
       field('assigned_trade', 'Assigned Trade'),
       field('priority', 'Priority', 'select', { options: ['Normal', 'High', 'Critical / Inspection Blocker'] }),
       field('location', 'Location'),
@@ -170,10 +189,12 @@ export const MODULES: ModuleDef[] = [
   {
     slug: 'estimates', table: 'estimates', label: 'Estimates', group: 'Estimating & Sales',
     description: 'Bids for shutdowns, electrical projects and service work.',
-    titleLabel: 'Project', titlePlaceholder: 'e.g. Canola Plant Shutdown Maintenance',
+    titleLabel: 'Project', titlePlaceholder: 'e.g. Canola Plant Shutdown Maintenance', recordLabel: 'Estimate',
     statuses: ['Draft', 'Submitted', 'Won', 'Lost'],
     fields: [
-      field('client_name', 'Client'),
+      projectField,
+      clientField,
+      field('client_name', 'Client Name (if not listed)'),
       field('client_address', 'Client / Site Address'),
       field('bid_due', 'Bid Due', 'date'),
       field('labour_rate', 'Labour Rate ($/hr)', 'money'),
@@ -192,7 +213,9 @@ export const MODULES: ModuleDef[] = [
     titleLabel: 'Proposal', titlePlaceholder: 'e.g. Unit 3 MCC Replacement — Proposal',
     statuses: ['Draft', 'Sent', 'Accepted', 'Declined'],
     fields: [
-      field('client_name', 'Client'),
+      projectField,
+      clientField,
+      field('client_name', 'Client Name (if not listed)'),
       field('total_amount', 'Total', 'money'),
       field('valid_until', 'Prices Valid Until', 'date'),
       field('scope_of_work', 'Scope of Work', 'textarea'),
@@ -224,23 +247,23 @@ export const MODULES: ModuleDef[] = [
     description: 'Active jobs with client, site, dates and contract value.',
     titleLabel: 'Project', titlePlaceholder: 'e.g. 24-118 Canola Plant Shutdown',
     statuses: ['Planning', 'Active', 'On Hold', 'Complete'],
-    fields: [field('client_name', 'Client'), field('site', 'Site'), field('start_date', 'Start', 'date'), field('end_date', 'End', 'date'), field('contract_value', 'Contract Value', 'money')],
+    fields: [clientField, field('client_name', 'Client Name (if not listed)'), field('site', 'Site'), field('start_date', 'Start', 'date'), field('end_date', 'End', 'date'), field('contract_value', 'Contract Value', 'money')],
     read: CREW, write: PM, remove: ADMIN,
   },
   {
     slug: 'rfis', table: 'rfis', label: 'RFIs', group: 'Project Controls',
     description: 'Questions to the engineer or owner, and their answers.',
-    titleLabel: 'Question', titlePlaceholder: 'e.g. Confirm feeder size to MCC-3',
+    titleLabel: 'Question', titlePlaceholder: 'e.g. Confirm feeder size to MCC-3', recordLabel: 'RFI',
     statuses: ['Open', 'Answered', 'Closed'],
-    fields: [field('rfi_number', 'RFI #'), field('assignee', 'Directed To'), field('due_date', 'Response Due', 'date')],
+    fields: [projectField, field('rfi_number', 'RFI #'), field('assignee', 'Directed To'), field('due_date', 'Response Due', 'date')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
     slug: 'change-orders', table: 'change_orders', label: 'Change Orders', group: 'Project Controls',
     description: 'Scope changes with cost impact and approval status.',
-    titleLabel: 'Change', titlePlaceholder: 'e.g. Add 2 VFDs to conveyor line',
+    titleLabel: 'Change', titlePlaceholder: 'e.g. Add 2 VFDs to conveyor line', recordLabel: 'Change Order',
     statuses: ['Pending Approval', 'Approved', 'Rejected', 'Invoiced'],
-    fields: [field('project_name', 'Project'), field('cost_impact', 'Cost Impact', 'money'), field('days_impact', 'Schedule Impact (days)', 'number')],
+    fields: [projectField, field('project_name', 'Project Name (if not listed)'), field('cost_impact', 'Cost Impact', 'money'), field('days_impact', 'Schedule Impact (days)', 'number')],
     read: FOREMAN, write: PM, remove: PM,
   },
   {
@@ -248,15 +271,15 @@ export const MODULES: ModuleDef[] = [
     description: 'Shop drawings and product data sent for review.',
     titleLabel: 'Submittal', titlePlaceholder: 'e.g. Lighting fixture schedule',
     statuses: ['Pending Review', 'Approved', 'Approved as Noted', 'Revise & Resubmit'],
-    fields: [field('submittal_number', 'Submittal #'), field('spec_section', 'Spec Section')],
+    fields: [projectField, field('submittal_number', 'Submittal #'), field('spec_section', 'Spec Section')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
     slug: 'drawings', table: 'drawings', label: 'Drawings', group: 'Project Controls',
     description: 'Drawing register with the current revision of each sheet.',
-    titleLabel: 'Sheet Title', titlePlaceholder: 'e.g. Single Line Diagram',
+    titleLabel: 'Sheet Title', titlePlaceholder: 'e.g. Single Line Diagram', recordLabel: 'Drawing',
     statuses: ['Issued for Construction', 'Superseded', 'For Review'],
-    fields: [field('drawing_number', 'Drawing #'), field('revision', 'Revision'), field('issued_date', 'Issued', 'date')],
+    fields: [projectField, field('drawing_number', 'Drawing #'), field('revision', 'Revision'), field('issued_date', 'Issued', 'date')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -264,7 +287,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Specs, manuals and procedures with version.',
     titleLabel: 'Document', titlePlaceholder: 'e.g. Site safety plan',
     statuses: ['Active', 'Draft', 'Archived'],
-    fields: [field('category', 'Category'), field('version', 'Version')],
+    fields: [projectField, field('category', 'Category'), field('version', 'Version')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -272,7 +295,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Restricted documents: contracts, access lists, client confidential.',
     titleLabel: 'Item', titlePlaceholder: 'e.g. Plant access card list',
     statuses: ['Secure', 'Expired'],
-    fields: [field('document_type', 'Type'), field('confidentiality', 'Confidentiality', 'select', { options: ['Restricted', 'Confidential', 'Internal'] })],
+    fields: [field('document_type', 'Type'), field('confidentiality', 'Confidentiality', 'select', { options: ['Restricted', 'Confidential', 'Internal'] }), field('expiry_date', 'Expiry', 'date')],
     read: PM, write: PM, remove: ADMIN,
   },
   {
@@ -280,7 +303,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Pre-functional and functional checks by system and tag.',
     titleLabel: 'Check', titlePlaceholder: 'e.g. MCC-3 functional test',
     statuses: ['Not Started', 'In Progress', 'Passed', 'Failed'],
-    fields: [field('equipment_tag', 'Equipment Tag'), field('system_type', 'System')],
+    fields: [projectField, field('equipment_tag', 'Equipment Tag'), field('system_type', 'System')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -288,7 +311,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Megger and continuity results by cable tag.',
     titleLabel: 'Test', titlePlaceholder: 'e.g. Feeder F-12 IR test',
     statuses: ['Pass', 'Fail', 'Retest'],
-    fields: [field('cable_tag', 'Cable Tag'), field('test_voltage', 'Test Voltage'), field('reading', 'Reading (MΩ)')],
+    fields: [projectField, field('cable_tag', 'Cable Tag'), field('test_voltage', 'Test Voltage'), field('reading', 'Reading (MΩ)')],
     read: CREW, write: CREW, remove: PM,
   },
   {
@@ -296,7 +319,7 @@ export const MODULES: ModuleDef[] = [
     description: 'QC checklists and hold points.',
     titleLabel: 'Check', titlePlaceholder: 'e.g. Termination torque check — panel LP-2',
     statuses: ['Open', 'Passed', 'Failed'],
-    fields: [field('checked_by', 'Checked By'), field('check_date', 'Date', 'date')],
+    fields: [projectField, field('checked_by', 'Checked By'), field('check_date', 'Date', 'date')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -304,7 +327,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Work or material that does not meet spec, and its disposition.',
     titleLabel: 'Issue', titlePlaceholder: 'e.g. Wrong cable type pulled to MCC-2',
     statuses: ['Open', 'Disposition Pending', 'Closed'],
-    fields: [field('disposition', 'Disposition', 'select', { options: ['Rework', 'Repair', 'Use As Is', 'Reject'] }), field('raised_by', 'Raised By')],
+    fields: [projectField, field('disposition', 'Disposition', 'select', { options: ['Rework', 'Repair', 'Use As Is', 'Reject'] }), field('raised_by', 'Raised By')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -328,7 +351,7 @@ export const MODULES: ModuleDef[] = [
     description: 'To-dos assigned to people, with due dates.',
     titleLabel: 'Task', titlePlaceholder: 'e.g. Order breakers for panel LP-3',
     statuses: ['To Do', 'In Progress', 'Done'],
-    fields: [field('assigned_to', 'Assigned To'), field('due_date', 'Due', 'date')],
+    fields: [projectField, field('assigned_to', 'Assigned To'), field('due_date', 'Due', 'date')],
     read: CREW, write: CREW, remove: FOREMAN,
   },
 
@@ -338,7 +361,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Budget against actual cost by job.',
     titleLabel: 'Job', titlePlaceholder: 'e.g. 24-118 Canola Plant Shutdown',
     statuses: ['On Track', 'At Risk', 'Over Budget', 'Closed'],
-    fields: [field('budget', 'Budget', 'money'), field('actual_cost', 'Actual Cost', 'money')],
+    fields: [projectField, field('budget', 'Budget', 'money'), field('actual_cost', 'Actual Cost', 'money')],
     read: PM, write: PM, remove: ADMIN,
   },
   {
@@ -346,7 +369,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Monthly progress draws with holdback.',
     titleLabel: 'Draw', titlePlaceholder: 'e.g. Draw #4 — October',
     statuses: ['Draft', 'Invoiced', 'Paid'],
-    fields: [field('billing_period', 'Period'), field('amount_billed', 'Amount Billed', 'money'), field('holdback_percent', 'Holdback %', 'number')],
+    fields: [projectField, field('billing_period', 'Period'), field('amount_billed', 'Amount Billed', 'money'), field('holdback_percent', 'Holdback %', 'number'), field('holdback_release_date', 'Holdback Release Date', 'date')],
     read: PM, write: PM, remove: ADMIN,
   },
   {
@@ -354,7 +377,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Invoices issued to clients.',
     titleLabel: 'Invoice', titlePlaceholder: 'e.g. INV-2026-0412',
     statuses: ['Draft', 'Sent', 'Paid', 'Overdue', 'Void'],
-    fields: [field('client_name', 'Client'), field('amount', 'Amount', 'money'), field('gst', 'GST', 'money'), field('due_date', 'Due', 'date')],
+    fields: [projectField, clientField, field('client_name', 'Client Name (if not listed)'), field('amount', 'Amount', 'money'), field('gst', 'GST', 'money'), field('due_date', 'Due', 'date')],
     read: ADMIN, write: ADMIN, remove: ADMIN,
   },
   {
@@ -362,7 +385,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Money owed to you, by client and age.',
     titleLabel: 'Receivable', titlePlaceholder: 'e.g. Cargill — Draw #3',
     statuses: ['Current', '30 Days', '60 Days', '90+ Days', 'Collected'],
-    fields: [field('client_name', 'Client'), field('amount', 'Amount', 'money'), field('due_date', 'Due', 'date')],
+    fields: [projectField, field('client_name', 'Client'), field('amount', 'Amount', 'money'), field('due_date', 'Due', 'date')],
     read: ADMIN, write: ADMIN, remove: ADMIN,
   },
   {
@@ -370,7 +393,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Supplier and subcontractor bills to pay.',
     titleLabel: 'Bill', titlePlaceholder: 'e.g. Westburne invoice 88123',
     statuses: ['To Approve', 'Approved', 'Paid'],
-    fields: [field('vendor', 'Vendor'), field('amount', 'Amount', 'money'), field('due_date', 'Due', 'date')],
+    fields: [projectField, field('vendor', 'Vendor'), field('amount', 'Amount', 'money'), field('due_date', 'Due', 'date'), field('purchase_order_id', 'Purchase Order', 'uuid', { hidden: true, references: 'purchase_orders' })],
     read: ADMIN, write: ADMIN, remove: ADMIN,
   },
   {
@@ -378,7 +401,7 @@ export const MODULES: ModuleDef[] = [
     description: 'POs to suppliers by job.',
     titleLabel: 'PO', titlePlaceholder: 'e.g. PO-1043 — 600 m 4/0 Teck',
     statuses: ['Draft', 'Issued', 'Partially Received', 'Received', 'Closed'],
-    fields: [field('vendor', 'Supplier'), field('project_name', 'Job'), field('amount', 'Amount', 'money'), field('required_date', 'Required On Site', 'date')],
+    fields: [projectField, field('vendor', 'Supplier'), field('project_name', 'Project Name (if not listed)'), field('amount', 'Amount', 'money'), field('required_date', 'Required On Site', 'date')],
     read: FOREMAN, write: PM, remove: PM,
   },
 
@@ -394,6 +417,7 @@ export const MODULES: ModuleDef[] = [
       field('phone', 'Phone', 'tel'),
       field('email', 'Email', 'email'),
       field('insurance_expiry', 'Insurance Expiry', 'date'),
+      field('wcb_clearance_expiry', 'WCB Clearance Expiry', 'date'),
     ],
     read: FOREMAN, write: PM, remove: PM,
     aliases: { vendorName: 'title', vendor_name: 'title' },
@@ -409,6 +433,7 @@ export const MODULES: ModuleDef[] = [
       field('liability_expiry', 'Liability Insurance Expiry', 'date'),
       field('safety_cert_verified', 'COR / Safety Cert Verified', 'boolean'),
       field('contact_person', 'Contact'),
+      field('wcb_clearance_expiry', 'WCB Clearance Expiry', 'date'),
     ],
     read: FOREMAN, write: PM, remove: PM,
     aliases: { companyName: 'title' },
@@ -416,20 +441,21 @@ export const MODULES: ModuleDef[] = [
   {
     slug: 'employees', table: 'employees', label: 'Employees', group: 'Resources',
     description: 'Staff with trade, ticket and contact details.',
-    titleLabel: 'Name', titlePlaceholder: 'e.g. Tessa Nguyen',
+    titleLabel: 'Name', titlePlaceholder: 'e.g. Tessa Nguyen', recordLabel: 'Employee',
     statuses: ['Active', 'On Leave', 'Terminated'],
     fields: [
       field('trade', 'Trade', 'select', { options: ['Journeyperson Electrician', 'Apprentice', 'Instrumentation', 'Foreman', 'Labourer', 'Office'] }),
       field('phone', 'Phone', 'tel'),
       field('email', 'Email', 'email'),
       field('ticket_expiry', 'Tickets Expire', 'date'),
+      field('hourly_cost', 'Hourly Cost ($/hr)', 'money'),
     ],
     read: ADMIN, write: ADMIN, remove: ADMIN,
   },
   {
     slug: 'hiring', table: 'hiring', label: 'Hiring', group: 'Resources',
     description: 'Open positions and candidates.',
-    titleLabel: 'Candidate / Position', titlePlaceholder: 'e.g. 4th-year apprentice — Saskatoon',
+    titleLabel: 'Candidate / Position', titlePlaceholder: 'e.g. 4th-year apprentice — Saskatoon', recordLabel: 'Candidate',
     statuses: ['Applied', 'Interview', 'Offer', 'Hired', 'Declined'],
     fields: [field('position', 'Position'), field('phone', 'Phone', 'tel'), field('email', 'Email', 'email')],
     read: ADMIN, write: ADMIN, remove: ADMIN,
@@ -447,7 +473,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Rented lifts and machinery with rates and off-rent dates.',
     titleLabel: 'Rental', titlePlaceholder: 'e.g. 60 ft boom lift',
     statuses: ['On Rent', 'Called Off', 'Returned'],
-    fields: [field('supplier', 'Supplier'), field('daily_rate', 'Daily Rate', 'money'), field('off_rent_date', 'Off-Rent Date', 'date')],
+    fields: [projectField, field('supplier', 'Supplier'), field('daily_rate', 'Daily Rate', 'money'), field('off_rent_date', 'Off-Rent Date', 'date')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -455,7 +481,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Trucks and trailers with mileage and service status.',
     titleLabel: 'Vehicle', titlePlaceholder: 'e.g. 2023 F-350 service truck',
     statuses: ['Operational', 'Service Due', 'Out of Service'],
-    fields: [field('unit_number', 'Unit #'), field('plate', 'Plate'), field('mileage', 'Odometer (km)', 'number')],
+    fields: [field('unit_number', 'Unit #'), field('plate', 'Plate'), field('mileage', 'Odometer (km)', 'number'), field('next_service_date', 'Next Service Date', 'date'), field('next_service_km', 'Next Service (km)', 'number')],
     read: CREW, write: FOREMAN, remove: PM,
   },
   {
@@ -471,7 +497,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Stock on hand by SKU.',
     titleLabel: 'Item', titlePlaceholder: 'e.g. 3/4" EMT connector',
     statuses: ['In Stock', 'Low', 'Out of Stock'],
-    fields: [field('sku', 'SKU'), field('quantity', 'Quantity', 'number'), field('bin', 'Bin')],
+    fields: [field('sku', 'SKU'), field('quantity', 'Quantity', 'number'), field('bin', 'Bin'), field('reorder_point', 'Reorder Point', 'number')],
     read: CREW, write: FOREMAN, remove: PM,
   },
 ];
@@ -492,4 +518,47 @@ const bySlug = new Map(MODULES.map((m) => [m.slug, m]));
 
 export function getModule(slug: string): ModuleDef | undefined {
   return bySlug.get(slug);
+}
+
+/** The table a field links to, or undefined for a plain field. */
+export function referenceTable(def: FieldDef): string | undefined {
+  if (def.type === 'project') return 'projects';
+  if (def.type === 'client') return 'crm';
+  return def.references;
+}
+
+/** Statuses a person can choose. System statuses are set by triggers and RPCs. */
+export function manualStatuses(mod: ModuleDef): string[] {
+  return mod.statuses.filter((s) => !mod.systemStatuses?.includes(s));
+}
+
+/** Fields a person fills in on the generic form. */
+export function editableFields(mod: ModuleDef): FieldDef[] {
+  return mod.fields.filter((f) => !f.computed && !f.hidden);
+}
+
+export interface TableColumn {
+  key: string;
+  label: string;
+  type: FieldType;
+  /** Reads the cell. Linked names win over the older typed text. */
+  value: (row: Record<string, unknown>) => unknown;
+}
+
+const linkedTitle = (row: Record<string, unknown>, link: string) => (row[link] as { title?: string } | null | undefined)?.title;
+
+/** Columns of the generic list: up to three plain fields, plus the project when the module links to one. */
+export function tableColumns(mod: ModuleDef): TableColumn[] {
+  const hasProject = mod.fields.some((f) => f.type === 'project');
+  const hasClient = mod.fields.some((f) => f.type === 'client');
+  const plain = mod.fields
+    .filter((f) => f.type !== 'textarea' && !f.hidden && !referenceTable(f) && !(hasProject && f.key === 'project_name'))
+    .slice(0, 3)
+    .map((f): TableColumn =>
+      hasClient && f.key === 'client_name'
+        ? { key: f.key, label: 'Client', type: 'text', value: (row) => linkedTitle(row, 'client') ?? row.client_name }
+        : { key: f.key, label: f.label, type: f.type, value: (row) => row[f.key] }
+    );
+  if (!hasProject) return plain;
+  return [{ key: 'project_id', label: 'Project', type: 'text', value: (row) => linkedTitle(row, 'project') ?? row.project_name }, ...plain];
 }

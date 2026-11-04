@@ -3,8 +3,7 @@ import { getModule, type ModuleDef } from '@/lib/modules';
 import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
 import { parseRecord, uuidSchema } from '@/lib/validation';
 import { JOB_PHOTOS_BUCKET } from '@/lib/daily-log';
-
-const MAX_LIMIT = 200;
+import { parsePage } from '@/lib/pagination';
 
 type Params = { params: { module: string; id?: string } };
 
@@ -16,6 +15,19 @@ function resolve(slug: string): ModuleDef | Response {
 export function escapeSearch(q: string): string {
   return q.replace(/[\\%_]/g, (c) => '\\' + c).replace(/[,()]/g, ' ');
 }
+
+/**
+ * Columns a list returns. Explicit, so signature images and other large extras stay on the detail pages.
+ * Linked names come along as row.project.title and row.client.title. Row level security applies to
+ * them too, so someone who can't read clients gets null and the list falls back to the typed name.
+ */
+export function listColumns(mod: ModuleDef): string {
+  const links = mod.fields.flatMap((f) => (f.type === 'project' ? ['project:projects!project_id(title)'] : f.type === 'client' ? ['client:crm!client_id(title)'] : []));
+  return ['id', 'title', 'status', 'notes', 'created_at', 'updated_at', ...mod.fields.map((f) => f.key), ...links].join(', ');
+}
+
+/** Columns a picker needs: nothing else about the record leaves the database. */
+export const PICKER_COLUMNS = 'id, title';
 
 async function parseBody(request: Request) {
   try {
@@ -32,17 +44,26 @@ export async function listRecords(request: Request, { params }: Params) {
   if (ctx instanceof Response) return ctx;
 
   const url = new URL(request.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 100, 1), MAX_LIMIT);
+  const { limit, offset } = parsePage(url.searchParams);
   const q = url.searchParams.get('q')?.trim().slice(0, 100);
   const status = url.searchParams.get('status');
+  const project = url.searchParams.get('project');
+  const picker = url.searchParams.get('picker') === '1';
+  const filtersByProject = !!project && mod.fields.some((f) => f.type === 'project');
+  if (filtersByProject && !uuidSchema.safeParse(project).success) return jsonError(400, 'That project was not found');
 
-  let query = ctx.supabase.from(mod.table).select('*', { count: 'exact' }).order('created_at', { ascending: false }).limit(limit);
+  let query = ctx.supabase
+    .from(mod.table)
+    .select(picker ? PICKER_COLUMNS : listColumns(mod), { count: 'exact' })
+    .order(picker ? 'title' : 'created_at', { ascending: picker })
+    .order('id', { ascending: false });
   if (q) query = query.ilike('title', `%${escapeSearch(q)}%`);
   if (status && mod.statuses.includes(status)) query = query.eq('status', status);
+  if (filtersByProject) query = query.eq('project_id', project);
 
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) return dbError(error, `loading ${mod.label}`);
-  return NextResponse.json({ data, count });
+  return NextResponse.json({ data, count, limit, offset });
 }
 
 export async function createRecord(request: Request, { params }: Params) {
@@ -97,20 +118,28 @@ export async function deleteRecord(_request: Request, { params }: Params) {
   const mod = resolve(params.module);
   if (mod instanceof Response) return mod;
   if (!uuidSchema.safeParse(params.id).success) return jsonError(404, 'Not found');
-  const ctx = await requireApi({ minRank: mod.remove });
+  const ctx = await requireApi({ minRank: mod.remove, write: true });
   if (ctx instanceof Response) return ctx;
 
-  const hasPhotos = mod.slug === 'daily-logs';
-  const { data, error } = await ctx.supabase.from(mod.table).delete().eq('id', params.id!).select(hasPhotos ? 'id, photos' : 'id');
-  if (error) return dbError(error, `deleting from ${mod.label}`);
-  if (!data?.length) return jsonError(404, 'Not found');
-  // Daily log photos live in storage, not the row; remove them with the log
-  if (hasPhotos) {
-    const photos = ((data[0] as { photos?: unknown }).photos ?? []) as string[];
+  // Daily log photos live in storage, not the row. Storage only lets photos go while
+  // their log exists and is unsigned, so they have to be removed before the log.
+  if (mod.slug === 'daily-logs') {
+    const { data: log, error: readError } = await ctx.supabase.from(mod.table).select('id, photos, signed_at').eq('id', params.id!).maybeSingle();
+    if (readError) return dbError(readError, `deleting from ${mod.label}`);
+    if (!log) return jsonError(404, 'Not found');
+    if (log.signed_at) return jsonError(409, 'This log is signed. Reopen it before deleting it.');
+    const photos = (log.photos ?? []) as string[];
     if (photos.length) {
       const { error: storageError } = await ctx.supabase.storage.from(JOB_PHOTOS_BUCKET).remove(photos);
-      if (storageError) console.error('Could not remove daily log photos', storageError);
+      if (storageError) {
+        console.error('Could not remove daily log photos', storageError);
+        return jsonError(502, 'Could not remove the photos, so the log was kept. Try again.');
+      }
     }
   }
+
+  const { data, error } = await ctx.supabase.from(mod.table).delete().eq('id', params.id!).select('id');
+  if (error) return dbError(error, `deleting from ${mod.label}`);
+  if (!data?.length) return jsonError(404, 'Not found');
   return NextResponse.json({ ok: true });
 }

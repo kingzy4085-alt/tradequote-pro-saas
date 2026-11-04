@@ -15,9 +15,11 @@ export interface Profile {
   default_tax?: number | string | null;
   default_labour_rate?: number | string | null;
   default_terms?: string | null;
+  overtime_multiplier?: number | string | null;
+  default_holdback_pct?: number | string | null;
 }
 
-const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms'] as const;
+const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms', 'overtime_multiplier', 'default_holdback_pct'] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
 export default function CompanyForm({ initial, canEdit }: { initial: Profile; canEdit: boolean }) {
@@ -83,6 +85,12 @@ export default function CompanyForm({ initial, canEdit }: { initial: Profile; ca
           <Label htmlFor="default_terms">Proposal terms</Label>
           <Textarea id="default_terms" rows={4} value={form.default_terms} disabled={!canEdit} onChange={(e) => set('default_terms', e.target.value)} />
           <FieldError message={errors.default_terms} />
+        </div>
+      </Panel>
+      <Panel title="Job defaults" description="Holdback and overtime rules vary by province and agreement. Set what applies to you.">
+        <div className="grid sm:grid-cols-2 gap-4">
+          {field('overtime_multiplier', 'Overtime multiplier (1.5 = time and a half)', 'number')}
+          {field('default_holdback_pct', 'Default holdback %', 'number')}
         </div>
       </Panel>
       {canEdit && (

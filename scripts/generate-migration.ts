@@ -1,10 +1,20 @@
-// Generates supabase/migrations/20261101000000_saas_core.sql from lib/modules.ts.
+// Generates two migrations from lib/modules.ts:
+//   20261101000000_saas_core.sql     the baseline for a new database
+//   20261104000000_registry_sync.sql the same registry DDL, idempotent, so a live database catches up
 // Run: node scripts/generate-migration.ts   (Node 22.18+ strips the TypeScript types)
 import { writeFileSync } from 'node:fs';
-import { MODULES, getModule, type ModuleDef } from '../lib/modules.ts';
+import { MODULES, getModule, referenceTable, type FieldDef, type ModuleDef } from '../lib/modules.ts';
 import { SQL_TYPE } from '../lib/db-types.ts';
 
 export const MIGRATION_PATH = 'supabase/migrations/20261101000000_saas_core.sql';
+export const REGISTRY_SYNC_PATH = 'supabase/migrations/20261104000000_registry_sync.sql';
+
+// Company settings added after the first release. Owners and admins may change them.
+const COMPANY_SETTINGS: { column: string; definition: string }[] = [
+  { column: 'overtime_multiplier', definition: 'numeric(5,2) not null default 1.5 check (overtime_multiplier between 1 and 10)' },
+  { column: 'default_holdback_pct', definition: 'numeric(5,2) not null default 10 check (default_holdback_pct between 0 and 100)' },
+];
+const COMPANY_SETTING_NAMES = COMPANY_SETTINGS.map((s) => s.column).join(', ');
 
 const CORE = `-- ============================================================================
 -- TradeQuote PRO — SaaS core schema (baseline for a NEW Supabase project)
@@ -34,6 +44,7 @@ create table public.companies (
   default_tax numeric(6,2) not null default 5 check (default_tax between 0 and 100),
   default_labour_rate numeric(10,2) not null default 0 check (default_labour_rate between 0 and 100000),
   default_terms text check (char_length(default_terms) <= 10000),
+${COMPANY_SETTINGS.map((s) => `  ${s.column} ${s.definition},`).join('\n')}
   created_at timestamptz not null default now()
 );
 
@@ -237,7 +248,7 @@ create policy ai_usage_select on public.ai_usage for select to authenticated
 
 revoke all on public.companies, public.company_users, public.invitations, public.ai_usage, public.stripe_events from anon, authenticated;
 grant select on public.companies, public.company_users, public.ai_usage to authenticated;
-grant update (name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms)
+grant update (name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms, ${COMPANY_SETTING_NAMES})
   on public.companies to authenticated;
 grant select, insert, delete on public.invitations to authenticated;
 
@@ -251,13 +262,11 @@ grant execute on function public.role_rank(text), public.user_company_id(), publ
   public.consume_ai_message() to authenticated;
 `;
 
-function moduleSql(m: ModuleDef): string {
-  const t = `public.${m.table}`;
+const moduleHeading = (m: ModuleDef) => `-- ${m.label} (read ${m.read}, write ${m.write}, delete ${m.remove}${m.ownRowsBelow ? `, own rows below ${m.ownRowsBelow}` : ''})`;
+
+function createTableBody(m: ModuleDef): string {
   const cols = m.fields.map((f) => `  ${f.key} ${SQL_TYPE[f.type]}${f.required ? ' not null' : ''},`).join('\n');
-  const own = m.ownRowsBelow ? ` and (public.user_rank() >= ${m.ownRowsBelow} or created_by = auth.uid())` : '';
-  return `
--- ${m.label} (read ${m.read}, write ${m.write}, delete ${m.remove}${m.ownRowsBelow ? `, own rows below ${m.ownRowsBelow}` : ''})
-create table ${t} (
+  return `(
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null default public.user_company_id() references public.companies(id) on delete cascade,
   created_by uuid default auth.uid() references auth.users(id) on delete set null,
@@ -267,22 +276,179 @@ create table ${t} (
 ${cols}
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
-);
+)`;
+}
+
+function modulePolicies(m: ModuleDef): { name: string; sql: string }[] {
+  const t = `public.${m.table}`;
+  const own = m.ownRowsBelow ? ` and (public.user_rank() >= ${m.ownRowsBelow} or created_by = auth.uid())` : '';
+  return [
+    {
+      name: `${m.table}_select`,
+      sql: `create policy ${m.table}_select on ${t} for select to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= ${m.read}${own});`,
+    },
+    {
+      name: `${m.table}_insert`,
+      sql: `create policy ${m.table}_insert on ${t} for insert to authenticated
+  with check (company_id = public.user_company_id() and public.user_rank() >= ${m.write} and public.company_can_write() and created_by = auth.uid());`,
+    },
+    {
+      name: `${m.table}_update`,
+      sql: `create policy ${m.table}_update on ${t} for update to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= ${m.write} and public.company_can_write()${own})
+  with check (company_id = public.user_company_id());`,
+    },
+    {
+      name: `${m.table}_delete`,
+      sql: `create policy ${m.table}_delete on ${t} for delete to authenticated
+  using (company_id = public.user_company_id() and public.user_rank() >= ${m.remove} and public.company_can_write()${own});`,
+    },
+  ];
+}
+
+function moduleSql(m: ModuleDef): string {
+  const t = `public.${m.table}`;
+  return `
+${moduleHeading(m)}
+create table ${t} ${createTableBody(m)};
 create index ${m.table}_company_idx on ${t}(company_id, created_at desc);
 create trigger ${m.table}_updated before update on ${t} for each row execute function public.set_updated_at();
 alter table ${t} enable row level security;
-create policy ${m.table}_select on ${t} for select to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= ${m.read}${own});
-create policy ${m.table}_insert on ${t} for insert to authenticated
-  with check (company_id = public.user_company_id() and public.user_rank() >= ${m.write} and public.company_can_write() and created_by = auth.uid());
-create policy ${m.table}_update on ${t} for update to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= ${m.write} and public.company_can_write()${own})
-  with check (company_id = public.user_company_id());
-create policy ${m.table}_delete on ${t} for delete to authenticated
-  using (company_id = public.user_company_id() and public.user_rank() >= ${m.remove}${own});
+${modulePolicies(m).map((p) => p.sql).join('\n')}
 revoke all on ${t} from anon;
 grant select, insert, update, delete on ${t} to authenticated;
 `;
+}
+
+/** The same module, safe to run on a database that already has some or all of it. */
+function moduleSyncSql(m: ModuleDef): string {
+  const t = `public.${m.table}`;
+  // A required column can't be added to rows that already exist, so it only gets NOT NULL on a new table
+  const addColumns = m.fields.map((f) => `alter table ${t} add column if not exists ${f.key} ${SQL_TYPE[f.type]};`).join('\n');
+  return `
+${moduleHeading(m)}
+create table if not exists ${t} ${createTableBody(m)};
+${addColumns}
+create index if not exists ${m.table}_company_idx on ${t}(company_id, created_at desc);
+drop trigger if exists ${m.table}_updated on ${t};
+create trigger ${m.table}_updated before update on ${t} for each row execute function public.set_updated_at();
+alter table ${t} enable row level security;
+${modulePolicies(m).map((p) => `drop policy if exists ${p.name} on ${t};\n${p.sql}`).join('\n')}
+revoke all on ${t} from anon;
+grant select, insert, update, delete on ${t} to authenticated;
+`;
+}
+
+const referenceFields = (m: ModuleDef): { def: FieldDef; target: string }[] =>
+  m.fields.flatMap((def) => {
+    const target = referenceTable(def);
+    return target ? [{ def, target }] : [];
+  });
+
+// Links between module tables. Tables are created in registry order, so these come after all of
+// them exist. Both migrations run this same idempotent SQL. A foreign key alone would accept
+// another company's id, because foreign key checks skip row level security; the trigger closes that.
+function relationsSql(): string {
+  const links = MODULES.flatMap((m) => referenceFields(m).map((r) => ({ m, ...r })))
+    .map(({ m, def, target }) => {
+      const t = `public.${m.table}`;
+      const fk = `${m.table}_${def.key}_fkey`;
+      const trigger = `${m.table}_${def.key}_company`;
+      return `
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = '${fk}' and conrelid = '${t}'::regclass) then
+    alter table ${t} add constraint ${fk} foreign key (${def.key}) references public.${target}(id) on delete set null;
+  end if;
+end $$;
+create index if not exists ${m.table}_${def.key}_idx on ${t}(${def.key});
+drop trigger if exists ${trigger} on ${t};
+create trigger ${trigger} before insert or update on ${t} for each row when (new.${def.key} is not null)
+  execute function public.check_same_company('${def.key}', '${target}', '${def.label.toLowerCase()}');`;
+    })
+    .join('\n');
+  return `
+-- Links between records -------------------------------------------------------
+-- Rejects a link to a record in another company. It also answers for ids that don't exist,
+-- with the same message, so nobody can probe which ids are real. An update checks against
+-- the row's stored company: company_id can't change, but this trigger may run before the
+-- one that restores it.
+create or replace function public.check_same_company() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_id uuid := (to_jsonb(new) ->> tg_argv[0])::uuid;
+  v_company uuid := case when tg_op = 'UPDATE' then old.company_id else new.company_id end;
+  v_found boolean;
+begin
+  execute format('select exists (select 1 from public.%I where id = $1 and company_id = $2)', tg_argv[1])
+    into v_found using v_id, v_company;
+  if not v_found then
+    raise exception 'That % was not found. Pick one from the list.', tg_argv[2] using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.check_same_company() from public, anon, authenticated;
+${links}
+`;
+}
+
+// Old free-text values these links replace. Exact name, same company, and only when exactly
+// one record has that name: anything else stays unlinked for a person to pick.
+const TITLE_NAMES_THE_PROJECT = new Set(['estimates', 'job_costing', 'timecards']);
+
+function backfillUpdate(m: ModuleDef, column: string, target: string, source: string): string {
+  const t = `public.${m.table}`;
+  // Linking isn't an edit, and some documents print updated_at as their date. A later migration may
+  // lock a table with its own trigger, and a rerun must not trip it, so no user trigger runs here;
+  // the query itself holds the same-company rule.
+  return `  alter table ${t} disable trigger user;
+  update ${t} r set ${column} = x.id
+    from public.${target} x
+    where r.${column} is null and x.company_id = r.company_id and x.title = r.${source}
+      and not exists (select 1 from public.${target} d where d.company_id = x.company_id and d.title = x.title and d.id <> x.id);
+  alter table ${t} enable trigger user;`;
+}
+
+function backfillSql(): string {
+  const updates = MODULES.flatMap((m) =>
+    m.fields.flatMap((f) => {
+      const hasField = (key: string) => m.fields.some((other) => other.key === key);
+      if (f.type === 'project') {
+        const source = hasField('project_name') ? 'project_name' : TITLE_NAMES_THE_PROJECT.has(m.table) ? 'title' : null;
+        return source ? [backfillUpdate(m, 'project_id', 'projects', source)] : [];
+      }
+      return f.type === 'client' && hasField('client_name') ? [backfillUpdate(m, 'client_id', 'crm', 'client_name')] : [];
+    })
+  );
+  return `
+-- Link existing records by exact name -------------------------------------------
+-- Only fills empty links, so running it again changes nothing that is already linked.
+do $$
+begin
+${updates.join('\n')}
+end $$;
+`;
+}
+
+const SYNC_HEADER = `-- ============================================================================
+-- TradeQuote PRO: registry sync. Brings a database up to lib/modules.ts.
+-- Generated by scripts/generate-migration.ts. Do not edit by hand.
+--
+-- Safe to run repeatedly, on a new database and on one that ran an older baseline.
+-- It creates what is missing and rewrites every registry policy and trigger.
+-- Hand-written rules belong in their own later migration.
+-- ============================================================================
+
+-- Company settings --------------------------------------------------------------
+${COMPANY_SETTINGS.map((s) => `alter table public.companies add column if not exists ${s.column} ${s.definition};`).join('\n')}
+grant update (${COMPANY_SETTING_NAMES}) on public.companies to authenticated;
+
+-- Module tables ---------------------------------------------------------------
+`;
+
+export function generateRegistrySync(): string {
+  return SYNC_HEADER + MODULES.map(moduleSyncSql).join('') + relationsSql() + backfillSql();
 }
 
 const ESTIMATE_RANK = getModule('estimates')!.write;
@@ -428,10 +594,11 @@ grant execute on function public.save_estimate_items(uuid, jsonb, numeric) to au
 `;
 
 export function generateMigration(): string {
-  return CORE + '\n-- Module tables ---------------------------------------------------------------\n' + MODULES.map(moduleSql).join('') + FEATURES;
+  return CORE + '\n-- Module tables ---------------------------------------------------------------\n' + MODULES.map(moduleSql).join('') + relationsSql() + FEATURES;
 }
 
 if (import.meta.url === `file:///${process.argv[1]?.replace(/\\/g, '/')}` || process.argv[1]?.endsWith('generate-migration.ts')) {
   writeFileSync(MIGRATION_PATH, generateMigration());
-  console.log(`Wrote ${MIGRATION_PATH} (${MODULES.length} module tables)`);
+  writeFileSync(REGISTRY_SYNC_PATH, generateRegistrySync());
+  console.log(`Wrote ${MIGRATION_PATH} and ${REGISTRY_SYNC_PATH} (${MODULES.length} module tables)`);
 }

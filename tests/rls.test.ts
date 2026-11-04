@@ -1,23 +1,8 @@
-// Runs the real migration on an embedded Postgres (PGlite) with a stand-in for
-// Supabase's auth schema, then acts as different users to prove the database
+// Runs every migration on an embedded Postgres (PGlite) with a stand-in for
+// Supabase's auth and storage, then acts as different users to prove the database
 // itself enforces company isolation, roles and subscription gating.
-import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { MIGRATION_PATH } from '../scripts/generate-migration';
-
-const SUPABASE_STUB = `
-create schema auth;
-create table auth.users (id uuid primary key, email text);
-create function auth.uid() returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-create function auth.jwt() returns jsonb language sql stable as $$
-  select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
-create role anon nologin;
-create role authenticated nologin;
-grant usage on schema public, auth to anon, authenticated;
-grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
-`;
+import { bootDb, type TestDb } from './helpers/db';
 
 const users = {
   ownerA: { id: '00000000-0000-4000-8000-00000000000a', email: 'owner@alpha.ca' },
@@ -28,39 +13,14 @@ const users = {
 };
 type U = keyof typeof users;
 
-let db: PGlite;
+let db: TestDb;
 
-async function as<T = Record<string, unknown>>(who: U | null, sql: string, params: unknown[] = []): Promise<T[]> {
-  await db.exec('reset role');
-  if (who) {
-    const u = users[who];
-    await db.query(`select set_config('request.jwt.claim.sub', $1, false), set_config('request.jwt.claims', $2, false)`, [u.id, JSON.stringify({ sub: u.id, email: u.email })]);
-    await db.exec('set role authenticated');
-  } else {
-    await db.query(`select set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claims', '', false)`);
-    await db.exec('set role anon');
-  }
-  try {
-    return (await db.query<T>(sql, params)).rows;
-  } finally {
-    await db.exec('reset role');
-  }
-}
-
-async function fails(who: U | null, sql: string, params: unknown[] = []): Promise<string> {
-  try {
-    await as(who, sql, params);
-  } catch (e) {
-    return (e as Error).message;
-  }
-  throw new Error(`Expected failure: ${sql}`);
-}
+const as = <T = Record<string, unknown>>(who: U | null, sql: string, params: unknown[] = []) => db.as<T>(who ? users[who] : null, sql, params);
+const fails = (who: U | null, sql: string, params: unknown[] = []) => db.fails(who ? users[who] : null, sql, params);
 
 beforeAll(async () => {
-  db = await PGlite.create();
-  await db.exec(SUPABASE_STUB);
-  await db.exec(readFileSync(MIGRATION_PATH, 'utf8'));
-  for (const u of Object.values(users)) await db.query('insert into auth.users (id, email) values ($1, $2)', [u.id, u.email]);
+  db = await bootDb();
+  await db.addUsers(...Object.values(users));
 
   await as('ownerA', `select public.create_company('Alpha Electric', 'SK', 'Alex Owner')`);
   await as('ownerB', `select public.create_company('Bravo Power', 'AB', 'Bea Owner')`);
@@ -92,6 +52,17 @@ describe('tenant isolation', () => {
     expect((await as('ownerA', `update public.estimates set title = 'pwned' where title = 'Bravo bid' returning id`)).length).toBe(0);
     expect((await as('ownerA', `delete from public.estimates where title = 'Bravo bid' returning id`)).length).toBe(0);
     expect((await as<{ title: string }>('ownerB', 'select title from public.estimates'))[0].title).toBe('Bravo bid');
+  });
+
+  it('cannot link a record to another company’s project or client', async () => {
+    const [{ id: bravoProject }] = await as<{ id: string }>('ownerB', `insert into public.projects (title, status) values ('Bravo job', 'Active') returning id`);
+    const [{ id: bravoClient }] = await as<{ id: string }>('ownerB', `insert into public.crm (title, status) values ('Bravo client', 'Lead') returning id`);
+    expect(await fails('ownerA', `insert into public.rfis (title, status, project_id) values ('Q', 'Open', $1)`, [bravoProject])).toMatch(/project was not found/);
+    expect(await fails('ownerA', `insert into public.estimates (title, status, client_id) values ('Bid', 'Draft', $1)`, [bravoClient])).toMatch(/client was not found/);
+    const [{ id }] = await as<{ id: string }>('ownerA', `insert into public.invoices (title, status) values ('Link test', 'Draft') returning id`);
+    expect(await fails('ownerA', 'update public.invoices set project_id = $1 where id = $2', [bravoProject, id])).toMatch(/project was not found/);
+    expect(await fails('ownerA', 'update public.invoices set client_id = $1 where id = $2', [bravoClient, id])).toMatch(/client was not found/);
+    await as('ownerA', 'delete from public.invoices where id = $1', [id]);
   });
 
   it('anonymous visitors and users without a company see nothing', async () => {
@@ -154,6 +125,17 @@ describe('roles', () => {
     await expect(as('ownerA', `update public.companies set subscription_status = 'active'`)).rejects.toThrow(/permission denied/);
     await as('ownerA', `update public.companies set name = 'Alpha Electric Ltd.'`);
     expect((await as<{ name: string }>('ownerA', 'select name from public.companies'))[0].name).toBe('Alpha Electric Ltd.');
+  });
+});
+
+describe('trial email tables', () => {
+  it('are hidden from users and visitors', async () => {
+    await db.system(`insert into public.email_unsubscribes (email) values ('owner@alpha.ca')`);
+    for (const t of ['trial_emails', 'email_unsubscribes']) {
+      expect(await fails('ownerA', `select * from public.${t}`)).toMatch(/permission denied/);
+      expect(await fails(null, `select * from public.${t}`)).toMatch(/permission denied/);
+    }
+    expect(await fails('ownerA', 'delete from public.email_unsubscribes')).toMatch(/permission denied/);
   });
 });
 
@@ -282,7 +264,7 @@ describe('daily log photos and sign-off', () => {
 
 describe('founding-list leads', () => {
   it('are not readable or writable by app users or visitors', async () => {
-    await db.exec(`insert into public.leads (name, company, email) values ('Lee', 'Lead Co', 'lee@lead.ca')`);
+    await db.system(`insert into public.leads (name, company, email) values ('Lee', 'Lead Co', 'lee@lead.ca')`);
     expect(await fails('ownerA', 'select * from public.leads')).toMatch(/permission denied/);
     expect(await fails(null, `insert into public.leads (name, company, email) values ('x', 'y', 'z@z.ca')`)).toMatch(/permission denied/);
   });
@@ -290,14 +272,14 @@ describe('founding-list leads', () => {
 
 describe('subscription gating', () => {
   it('locks writes after the trial ends but keeps reads', async () => {
-    await db.exec(`update public.companies set trial_ends_at = now() - interval '1 day' where name = 'Bravo Power'`);
+    await db.system(`update public.companies set trial_ends_at = now() - interval '1 day' where name = 'Bravo Power'`);
     expect(await fails('ownerB', `insert into public.estimates (title, status) values ('late', 'Draft')`)).toMatch(/row-level security/);
     expect((await as('ownerB', `update public.estimates set title = 'late' returning id`)).length).toBe(0);
     expect((await as('ownerB', 'select * from public.estimates')).length).toBe(1);
     const [usage] = await as<{ allowed: boolean }>('ownerB', 'select * from public.consume_ai_message()');
     expect(usage.allowed).toBe(false);
 
-    await db.exec(`update public.companies set subscription_status = 'active' where name = 'Bravo Power'`);
+    await db.system(`update public.companies set subscription_status = 'active' where name = 'Bravo Power'`);
     await as('ownerB', `insert into public.estimates (title, status) values ('paid', 'Draft')`);
   });
 

@@ -67,15 +67,20 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   return <input ref={ref} {...props} className={cx(inputClass, props.className)} />;
 });
 
-export function Select({ options, placeholder, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: string[]; placeholder?: string }) {
+export type SelectOption = string | { value: string; label: string };
+
+export function Select({ options, placeholder, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: SelectOption[]; placeholder?: string }) {
   return (
     <select {...props} className={cx(inputClass, props.className)}>
       {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
+      {options.map((o) => {
+        const { value, label } = typeof o === 'string' ? { value: o, label: o } : o;
+        return (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        );
+      })}
     </select>
   );
 }

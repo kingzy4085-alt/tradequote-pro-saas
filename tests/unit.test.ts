@@ -9,7 +9,7 @@ import { companyStatusFromSubscription } from '@/lib/billing';
 import { ChatRequest } from '@/lib/assistant';
 import { formatValue } from '@/lib/format';
 import { isPublicPath } from '@/middleware';
-import { generateMigration, MIGRATION_PATH } from '../scripts/generate-migration';
+import { generateMigration, generateRegistrySync, MIGRATION_PATH, REGISTRY_SYNC_PATH } from '../scripts/generate-migration';
 
 const RESERVED = new Set(['id', 'company_id', 'created_by', 'title', 'status', 'notes', 'created_at', 'updated_at']);
 
@@ -42,6 +42,36 @@ describe('module registry', () => {
 
   it('committed migration matches the registry', () => {
     expect(readFileSync(MIGRATION_PATH, 'utf8')).toBe(generateMigration());
+  });
+
+  it('committed registry sync matches the registry', () => {
+    expect(readFileSync(REGISTRY_SYNC_PATH, 'utf8')).toBe(generateRegistrySync());
+  });
+
+  it('registry sync has only statements that can run again', () => {
+    const sync = generateRegistrySync();
+    expect(sync).not.toMatch(/create table (?!if not exists)/);
+    expect(sync).not.toMatch(/create index (?!if not exists)/);
+    expect(sync).not.toMatch(/add column (?!if not exists)/);
+    const before = (kind: string, name: string, on: string) => sync.indexOf(`drop ${kind} if exists ${name} on ${on};\n`);
+    for (const [, name, on] of sync.matchAll(/create policy (\S+) on (\S+)/g)) expect(before('policy', name, on), name).toBeGreaterThanOrEqual(0);
+    for (const [, name, on] of sync.matchAll(/create trigger (\S+) before [^\n]*? on (\S+)/g)) expect(before('trigger', name, on), name).toBeGreaterThanOrEqual(0);
+  });
+
+  it('registry sync covers every module column and adds links after every table exists', () => {
+    const sync = generateRegistrySync();
+    for (const m of MODULES) {
+      expect(sync).toContain(`create table if not exists public.${m.table} (`);
+      for (const f of m.fields) expect(sync, `${m.table}.${f.key}`).toContain(`alter table public.${m.table} add column if not exists ${f.key} `);
+    }
+    const lastTable = sync.lastIndexOf('create table if not exists');
+    const firstLink = sync.indexOf('foreign key (');
+    expect(firstLink).toBeGreaterThan(lastTable);
+    for (const sql of [sync, generateMigration()]) {
+      expect(sql).toContain('(project_id) references public.projects(id) on delete set null');
+      expect(sql).toContain('(client_id) references public.crm(id) on delete set null');
+      expect(sql).toContain('(purchase_order_id) references public.purchase_orders(id) on delete set null');
+    }
   });
 });
 

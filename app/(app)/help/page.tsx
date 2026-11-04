@@ -7,7 +7,7 @@ const STEPS = [
   { title: 'Set up your company', href: '/settings/company', link: 'Company Profile', text: 'Add your phone, address, default markup, sales tax, labour rate and proposal terms. Every new estimate starts with them.' },
   { title: 'Invite your team', href: '/settings/team', link: 'Team', text: 'Invite people by email and pick their role. Electricians see field tools and only their own timecards; project managers and up see estimates and money.' },
   { title: 'Add your client', href: '/crm', link: 'CRM', text: 'Add the company, contact and job site.' },
-  { title: 'Build an estimate', href: '/estimates', link: 'Estimates', text: 'Press "+ New Project", then click the project name to open it. Add lines with quantity, material cost and labour hours — totals, markup and tax update as you type. Press Save.' },
+  { title: 'Build an estimate', href: '/estimates', link: 'Estimates', text: 'Press "+ New Estimate", then click the project name to open it. Add lines with quantity, material cost and labour hours — totals, markup and tax update as you type. Press Save.' },
   { title: 'Send the proposal', href: '/estimates', link: 'Estimates', text: 'In the estimate, press Proposal. It shows one price per line with your markup built in, your terms and signature lines. Print it or save it as a PDF.' },
   { title: 'Run the job', href: '/daily-logs', link: 'Daily Logs', text: 'Each day, open a daily log, fill in the crew, hours and work done, and add photos straight from the phone camera. Sign it on the screen to lock it.' },
   { title: 'Track changes and bill', href: '/change-orders', link: 'Change Orders', text: 'Log change orders and RFIs the moment they happen, then add progress bills as work is done.' },

@@ -18,7 +18,9 @@ export const CompanyProfileSchema = z
     default_tax: percent(100),
     default_labour_rate: percent(100000),
     default_terms: text(10000),
+    overtime_multiplier: z.coerce.number().finite().min(1, 'Must be at least 1').max(10, 'Must be 10 or less').optional(),
+    default_holdback_pct: percent(100),
   })
   .strip();
 
-export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms';
+export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms, overtime_multiplier, default_holdback_pct';

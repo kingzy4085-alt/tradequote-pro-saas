@@ -3,6 +3,9 @@ import type { FieldType } from './modules';
 const cad = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' });
 const num = new Intl.NumberFormat('en-CA', { maximumFractionDigits: 2 });
 
+/** A label for mid-sentence use. Acronyms keep their capitals: "daily log", but "RFI" and "PO". */
+export const inSentence = (label: string) => label.replace(/\b[A-Z][a-z]+\b/g, (word) => word.toLowerCase());
+
 export function formatMoney(value: unknown): string {
   const n = Number(value);
   return Number.isFinite(n) ? cad.format(n) : '—';

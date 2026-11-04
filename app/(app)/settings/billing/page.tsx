@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { Alert, PageHeader, Panel } from '@/components/ui';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
+import { companyHasLiveSubscription } from '@/lib/billing';
 import { hasRank } from '@/lib/roles';
 import BillingActions from './billing-actions';
 
@@ -15,7 +16,7 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export default async function BillingPage({ searchParams }: { searchParams: { checkout?: string } }) {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') redirect('/login');
   const { ctx } = result;
   if (!hasRank(ctx.role, 4)) notFound();
@@ -55,7 +56,7 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
           <li>Desktop, Android and iPhone install</li>
         </ul>
         <div className="mt-6">
-          <BillingActions status={c.subscription_status} hasCustomer={!!c.stripe_customer_id} />
+          <BillingActions canSubscribe={!companyHasLiveSubscription(c)} hasCustomer={!!c.stripe_customer_id} />
         </div>
       </Panel>
     </>

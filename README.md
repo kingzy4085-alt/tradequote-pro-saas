@@ -15,8 +15,19 @@ Operations software for Canadian industrial and electrical contractors: estimati
 1. **Supabase** — create a new project. In the SQL editor, run [`supabase/migrations/20261101000000_saas_core.sql`](supabase/migrations/20261101000000_saas_core.sql). It is the baseline schema for a **fresh** project (the old scripts in `database/legacy/` are kept for reference only — don't run them). Then run [`supabase/migrations/20261101000100_job_photos_storage.sql`](supabase/migrations/20261101000100_job_photos_storage.sql) for the private job-photo storage.
    - Auth → URL configuration: set the Site URL to your app URL and add `https://YOUR-DOMAIN/auth/callback` to the redirect URLs.
    - Auth → Email: keep "Confirm email" on, and set up custom SMTP before launch (Supabase's built-in sender is rate limited).
+   - Auth → Email Templates: replace the link in each template below, or invites and links opened on another device won't work. `token_hash` links work on any device; invited people and password resets are sent to choose a password first.
+
+     | Template | Link |
+     | --- | --- |
+     | Confirm signup | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email` |
+     | Invite user | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/onboarding` |
+     | Magic Link | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=magiclink` |
+     | Change Email Address | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
+     | Reset Password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
+   - Run every other file in `supabase/migrations/` in filename order. `20261104000050_hardening.sql` must be in place before this version of the code goes live: the Stripe webhook needs `stripe_events.processed_at`.
 2. **Stripe** — create a Product with a recurring monthly **CAD** Price and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.
 3. **Claude API** — create a key at console.anthropic.com.
+   - **Trial emails** — run [`supabase/migrations/20261101000200_trial_emails.sql`](supabase/migrations/20261101000200_trial_emails.sql) after the baseline. Create a [Resend](https://resend.com) account, verify your domain and add an API key. Set `CRON_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`, `BUSINESS_NAME` and `BUSINESS_MAILING_ADDRESS`. On Vercel, [`vercel.json`](vercel.json) runs `/api/cron/trial-emails` daily. Elsewhere, call it once a day with `Authorization: Bearer $CRON_SECRET`. Owners get five emails over the trial (days 0, 2, 5, 10 and 13), and each email has an unsubscribe link.
 4. Copy `.env.example` to `.env.local` and fill it in.
 5. Install and run:
 
@@ -37,11 +48,13 @@ npm run dev
 
 ## Adding or changing a module
 
-Edit `lib/modules.ts`, run `npm run db:generate`, then `npm test`. For a database that's already live, write a follow-up migration with the `alter table` changes rather than re-running the baseline.
+Edit `lib/modules.ts`, run `npm run db:generate`, then `npm test`. The generator rewrites two files: the baseline for a new database, and `20261104000000_registry_sync.sql`, the same tables, columns, policies and links written so they can run on a database that already has them. Never re-run the baseline on a live database.
+
+A migration tool runs each filename once, so a database that has already recorded the sync won't pick up a later change to it. For that database, paste the regenerated sync into the SQL editor, then re-run every hand-written migration after it, because the sync puts back the generated policies and triggers on module tables.
 
 ## Install as an app
 
-- **Windows:** run `install-desktop-shortcut.ps1` once; the "TradeQuote PRO" shortcut starts the server and opens the app window.
+- **Windows:** create `.env.local`, then run `install-desktop-shortcut.ps1` once; the "TradeQuote PRO" shortcut starts the server on this computer only (`127.0.0.1:3001`) and opens the app window. Add `http://localhost:3001/auth/callback` to Supabase's redirect URLs. Scheduled jobs don't run from the desktop app; they run on the deployed host, and the desktop app shares that host's Supabase project.
 - **Android / iPhone:** once deployed on HTTPS, open the site and choose *Install app* (Chrome) or *Share → Add to Home Screen* (Safari).
 
 ## Before you sell it

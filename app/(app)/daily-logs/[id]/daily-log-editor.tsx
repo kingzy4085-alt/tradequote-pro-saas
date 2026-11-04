@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { JOB_PHOTOS_BUCKET, MAX_PHOTOS, photoFolder } from '@/lib/daily-log';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
-import SignaturePad from './signature-pad';
+import SignaturePad from '@/components/signature-pad';
 
 export interface DailyLog {
   id: string;

@@ -10,7 +10,9 @@ const securityHeaders = [
 
 const nextConfig = {
   poweredByHeader: false,
-  // Next 14.1's minifier mangles a Unicode regex in the Anthropic SDK; load it from node_modules instead
+  // No next/image in this app, and middleware closes the optimizer endpoint (open advisories on Next 14)
+  images: { unoptimized: true },
+  // Next 14's minifier mangles a Unicode regex in the Anthropic SDK; load it from node_modules instead
   experimental: { serverComponentsExternalPackages: ['@anthropic-ai/sdk'] },
   // ESLint isn't installed in this project; TypeScript errors still fail the build
   eslint: { ignoreDuringBuilds: true },

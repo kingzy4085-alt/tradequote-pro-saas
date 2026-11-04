@@ -1,0 +1,2 @@
+# Migrations are compared byte-for-byte with the generator in tests
+supabase/migrations/*.sql text eol=lf
