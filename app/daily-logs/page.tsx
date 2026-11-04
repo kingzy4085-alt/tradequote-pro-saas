@@ -1,1 +1,0 @@
-﻿export default function DailyLogsPage() { return (<div className='p-8 text-white'><h1 className='text-2xl font-bold'>Daily Logs</h1><p className='mt-2'>Industrial daily log management and tracking.</p></div>); }
