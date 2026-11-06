@@ -1,53 +1,47 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { estimateTotals, lineSellPrice } from '@/lib/estimate-math';
 import { formatMoney } from '@/lib/format';
 import { getModule } from '@/lib/modules';
+import { Letterhead, loadLetterhead } from '@/lib/print';
 import { hasRank } from '@/lib/roles';
 import { uuidSchema } from '@/lib/validation';
 import PrintButton from '../../proposal/[id]/print-button';
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_TERMS = 'Pricing valid for 30 days. Work outside the scope above will be quoted as a change order. Payment due 30 days from invoice.';
 const fmt = (d: Date) => d.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
 
-// The client-facing proposal for an estimate: one price per line, markup folded in, costs hidden
+// A look at how an estimate will read to a client: one price per line, markup folded in, costs hidden.
+// The document a client gets, accepts and signs is the proposal at app/print/proposal, which carries the
+// validity date. So this one has neither a validity date nor a place to sign.
 export default async function PrintEstimate({ params }: { params: { id: string } }) {
   if (!uuidSchema.safeParse(params.id).success) notFound();
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status === 'signed-out') redirect('/login');
   if (result.status !== 'ok') redirect('/onboarding');
   const { ctx } = result;
   if (!hasRank(ctx.role, getModule('estimates')!.read)) notFound();
 
-  const [{ data: est }, { data: items }, { data: company }] = await Promise.all([
+  const [{ data: est }, { data: items }, company] = await Promise.all([
     ctx.supabase.from('estimates').select('*').eq('id', params.id).maybeSingle(),
     ctx.supabase.from('estimate_items').select('*').eq('estimate_id', params.id).order('sort'),
-    ctx.supabase.from('companies').select('name, province, contact, phone, email, address, default_terms').eq('id', ctx.company.id).maybeSingle(),
+    loadLetterhead(ctx),
   ]);
   if (!est) notFound();
 
   const lines = items ?? [];
   const t = estimateTotals(lines, est.labour_rate, est.markup_percentage, est.tax_percentage);
-  const name = company?.name ?? ctx.company.name;
   const issued = new Date(est.updated_at ?? est.created_at);
 
   return (
     <main className="min-h-screen bg-white text-gray-700">
       <article className="max-w-[8.5in] mx-auto p-10 print:p-0 text-sm leading-relaxed">
-        <header className="flex justify-between gap-6 border-b-2 border-black pb-5">
-          <div>
-            <h1 className="text-2xl font-bold text-black">{name}</h1>
-            {company?.address && <p>{company.address}</p>}
-            <p>{[company?.contact, company?.phone, company?.email].filter(Boolean).join(' · ')}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xl font-bold text-black uppercase tracking-wide">Proposal</p>
-            <p>{fmt(issued)}</p>
-            <p>Valid until {fmt(new Date(issued.getTime() + 30 * 86_400_000))}</p>
-          </div>
-        </header>
+        <Letterhead company={company} document="Quote preview">
+          <p>{fmt(issued)}</p>
+          <p>Internal preview. Not an offer.</p>
+        </Letterhead>
 
         <section className="grid grid-cols-2 gap-6 py-5">
           <div>
@@ -106,21 +100,15 @@ export default async function PrintEstimate({ params }: { params: { id: string }
           </div>
         </dl>
 
-        <section className="pt-6 break-inside-avoid">
-          <h2 className="text-xs font-bold uppercase text-black mb-1">Terms</h2>
-          <p className="whitespace-pre-line">{est.terms || company?.default_terms || DEFAULT_TERMS}</p>
-        </section>
+        {(est.terms || company.default_terms) && (
+          <section className="pt-6 break-inside-avoid">
+            <h2 className="text-xs font-bold uppercase text-black mb-1">Terms</h2>
+            <p className="whitespace-pre-line">{est.terms || company.default_terms}</p>
+          </section>
+        )}
 
-        <section className="grid grid-cols-2 gap-10 pt-14 break-inside-avoid">
-          {['Accepted by (client)', `For ${name}`].map((l) => (
-            <div key={l}>
-              <div className="border-b border-black h-10" />
-              <p className="text-xs mt-1">{l} — signature &amp; date</p>
-            </div>
-          ))}
-        </section>
-
-        <div className="mt-10 flex justify-end print:hidden">
+        <div className="mt-10 flex items-center justify-between gap-4 print:hidden">
+          <Link href={`/estimates/${params.id}`} className="underline">Back to the estimate</Link>
           <PrintButton />
         </div>
       </article>

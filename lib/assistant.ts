@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { MODULES, getModule } from '@/lib/modules';
 import { provinceName } from '@/lib/provinces';
+import { withRestrictedMoney } from '@/lib/project-money';
 import { hasRank, type Role } from '@/lib/roles';
 import { escapeSearch } from '@/lib/crud';
 
@@ -17,6 +18,29 @@ export const ChatRequest = z.object({
     // zod still runs refinements after .min() fails, so guard against an empty list
     .refine((m) => m.length > 0 && m[0].role === 'user' && m[m.length - 1].role === 'user', 'Conversation must start and end with a user message'),
 });
+
+/** Roughly what one question's conversation history may cost, so the daily limit also bounds spend. */
+export const MAX_HISTORY_TOKENS = 12_000;
+
+// About four characters per token for English; close enough for a budget
+const approxTokens = (text: string) => Math.ceil(text.length / 4);
+
+/**
+ * Keeps the most recent messages that fit the token budget. The latest question is
+ * always kept, and the result still starts with a user message as the API requires.
+ */
+export function capHistory<T extends { role: 'user' | 'assistant'; content: string }>(messages: T[], maxTokens = MAX_HISTORY_TOKENS): T[] {
+  let start = messages.length - 1;
+  let tokens = approxTokens(messages[start].content);
+  while (start > 0) {
+    const next = tokens + approxTokens(messages[start - 1].content);
+    if (next > maxTokens) break;
+    tokens = next;
+    start--;
+  }
+  while (messages[start].role !== 'user') start++;
+  return messages.slice(start);
+}
 
 /** Stable instructions — cached across every request, so nothing per-request goes in here. */
 export const SYSTEM_PROMPT = `You are the TradeQuote PRO assistant: a senior construction and electrical contracting advisor for Canadian contractors — estimators, project managers, office admins, foremen and electricians working industrial shutdowns, commercial and institutional jobs.
@@ -77,7 +101,8 @@ export async function runRecordSearch(supabase: SupabaseClient, role: Role, rawI
   const mod = getModule(slug);
   if (!mod || !hasRank(role, mod.read)) return { content: `Module "${slug}" is not available to this user.`, isError: true };
 
-  const columns = ['title', 'status', 'notes', 'created_at', ...mod.fields.map((f) => f.key)].join(', ');
+  const hydrated = mod.slug === 'projects' || mod.slug === 'change-orders';
+  const columns = [...(hydrated ? ['id'] : []), 'title', 'status', 'notes', 'created_at', ...mod.fields.filter((f) => f.type !== 'list' && !f.restricted).map((f) => f.key)].join(', ');
   let q = supabase.from(mod.table).select(columns, { count: 'exact' }).order('created_at', { ascending: false }).limit(limit);
   if (query) q = q.ilike('title', `%${escapeSearch(query)}%`);
   if (status) q = q.eq('status', status);
@@ -86,7 +111,16 @@ export async function runRecordSearch(supabase: SupabaseClient, role: Role, rawI
     console.error('Assistant record search failed', error);
     return { content: 'The records could not be loaded.', isError: true };
   }
-  return { content: JSON.stringify({ module: mod.label, total_matching: count, returned: data?.length ?? 0, records: data }), isError: false };
+  let records: unknown = data;
+  if (hydrated) {
+    const full = await withRestrictedMoney(mod.slug, supabase, role, (data ?? []) as unknown as { id: string }[]);
+    if ('error' in full) {
+      console.error('Assistant record search failed', full.error);
+      return { content: 'The records could not be loaded.', isError: true };
+    }
+    records = full.rows.map(({ id: _id, ...row }) => row);
+  }
+  return { content: JSON.stringify({ module: mod.label, total_matching: count, returned: data?.length ?? 0, records }), isError: false };
 }
 
 export interface Source {

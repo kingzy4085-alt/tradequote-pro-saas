@@ -22,6 +22,10 @@ export function formatValue(type: FieldType, value: unknown): string {
       const [y, m, d] = String(value).split('-').map(Number);
       return y && m && d ? new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-CA', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' }) : String(value);
     }
+    case 'datetime': {
+      const when = new Date(String(value));
+      return Number.isNaN(when.getTime()) ? String(value) : when.toLocaleString('en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
     default:
       return String(value);
   }

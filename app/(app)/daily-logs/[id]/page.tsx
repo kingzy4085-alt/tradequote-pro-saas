@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { getModule } from '@/lib/modules';
 import { hasRank } from '@/lib/roles';
 import { uuidSchema } from '@/lib/validation';
@@ -10,7 +10,7 @@ export const metadata = { title: 'Daily Log · TradeQuote PRO' };
 
 export default async function DailyLogPage({ params }: { params: { id: string } }) {
   if (!uuidSchema.safeParse(params.id).success) notFound();
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') notFound();
   const { ctx } = result;
   const mod = getModule('daily-logs')!;
@@ -25,7 +25,7 @@ export default async function DailyLogPage({ params }: { params: { id: string } 
       statuses={mod.statuses}
       canWrite={ctx.canWrite && hasRank(ctx.role, mod.write)}
       canReopen={ctx.canWrite && hasRank(ctx.role, 2)}
-      canDelete={hasRank(ctx.role, mod.remove)}
+      canDelete={ctx.canWrite && hasRank(ctx.role, mod.remove)}
     />
   );
 }

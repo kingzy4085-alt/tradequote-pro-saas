@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
 import { COMPANY_PROFILE_COLUMNS, CompanyProfileSchema } from '@/lib/company';
+import { withCompanyRates } from '@/lib/project-money';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,9 @@ export async function GET() {
   if (ctx instanceof Response) return ctx;
   const { data, error } = await ctx.supabase.from('companies').select(COMPANY_PROFILE_COLUMNS).eq('id', ctx.company.id).maybeSingle();
   if (error) return dbError(error, 'loading the company profile');
-  return NextResponse.json({ data });
+  const full = await withCompanyRates(ctx.supabase, ctx.role, data ?? {});
+  if ('error' in full) return dbError(full.error, 'loading the company profile');
+  return NextResponse.json({ data: data ? full.profile : null });
 }
 
 // Owners and admins only; the database enforces the same rule and only lets these columns change
@@ -33,5 +36,7 @@ export async function PATCH(request: Request) {
   const { data, error } = await ctx.supabase.from('companies').update(parsed.data).eq('id', ctx.company.id).select(COMPANY_PROFILE_COLUMNS).maybeSingle();
   if (error) return dbError(error, 'saving the company profile');
   if (!data) return jsonError(403, 'Only the owner or an admin can change company details');
-  return NextResponse.json({ data });
+  const full = await withCompanyRates(ctx.supabase, ctx.role, data);
+  if ('error' in full) return dbError(full.error, 'saving the company profile');
+  return NextResponse.json({ data: full.profile });
 }

@@ -15,12 +15,14 @@ export interface Profile {
   default_tax?: number | string | null;
   default_labour_rate?: number | string | null;
   default_terms?: string | null;
+  overtime_multiplier?: number | string | null;
+  default_holdback_pct?: number | string | null;
 }
 
-const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms'] as const;
+const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms', 'overtime_multiplier', 'default_holdback_pct'] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
-export default function CompanyForm({ initial, canEdit }: { initial: Profile; canEdit: boolean }) {
+export default function CompanyForm({ initial, canEdit, canSeeRates = canEdit }: { initial: Profile; canEdit: boolean; /** The markup and labour rate are for project managers and up. */ canSeeRates?: boolean }) {
   const [form, setForm] = useState<Form>(() => Object.fromEntries(KEYS.map((k) => [k, initial[k] == null ? '' : String(initial[k])])) as Form);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
@@ -39,7 +41,7 @@ export default function CompanyForm({ initial, canEdit }: { initial: Profile; ca
         setStatus({ tone: 'error', text: json.error ?? 'Could not save' });
         return;
       }
-      setStatus({ tone: 'success', text: 'Saved. New estimates start with these defaults.' });
+      setStatus({ tone: 'success', text: 'Saved. New records start with these defaults.' });
     } catch {
       setStatus({ tone: 'error', text: 'Network error — check your connection and try again.' });
     } finally {
@@ -75,14 +77,20 @@ export default function CompanyForm({ initial, canEdit }: { initial: Profile; ca
       </Panel>
       <Panel title="Estimating defaults">
         <div className="grid sm:grid-cols-3 gap-4">
-          {field('default_markup', 'Default markup %', 'number')}
+          {canSeeRates && field('default_markup', 'Default markup %', 'number')}
           {field('default_tax', 'Sales tax %', 'number')}
-          {field('default_labour_rate', 'Labour rate ($/hr)', 'number')}
+          {canSeeRates && field('default_labour_rate', 'Labour rate ($/hr)', 'number')}
         </div>
         <div className="mt-4">
           <Label htmlFor="default_terms">Proposal terms</Label>
           <Textarea id="default_terms" rows={4} value={form.default_terms} disabled={!canEdit} onChange={(e) => set('default_terms', e.target.value)} />
           <FieldError message={errors.default_terms} />
+        </div>
+      </Panel>
+      <Panel title="Payroll and billing defaults">
+        <div className="grid sm:grid-cols-2 gap-4">
+          {field('overtime_multiplier', 'Overtime multiplier (1.5 = time and a half)', 'number')}
+          {field('default_holdback_pct', 'Holdback %', 'number')}
         </div>
       </Panel>
       {canEdit && (

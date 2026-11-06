@@ -1,23 +1,9 @@
-// Runs the real migration on an embedded Postgres (PGlite) with a stand-in for
-// Supabase's auth schema, then acts as different users to prove the database
+// Runs every migration on an embedded Postgres (PGlite) with a stand-in for
+// Supabase's auth and storage, then acts as different users to prove the database
 // itself enforces company isolation, roles and subscription gating.
-import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import type { PGlite } from '@electric-sql/pglite';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { MIGRATION_PATH } from '../scripts/generate-migration';
-
-const SUPABASE_STUB = `
-create schema auth;
-create table auth.users (id uuid primary key, email text);
-create function auth.uid() returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-create function auth.jwt() returns jsonb language sql stable as $$
-  select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
-create role anon nologin;
-create role authenticated nologin;
-grant usage on schema public, auth to anon, authenticated;
-grant execute on function auth.uid(), auth.jwt() to anon, authenticated;
-`;
+import { bootDb, type TestDb } from './helpers/db';
 
 const users = {
   ownerA: { id: '00000000-0000-4000-8000-00000000000a', email: 'owner@alpha.ca' },
@@ -29,38 +15,13 @@ const users = {
 type U = keyof typeof users;
 
 let db: PGlite;
-
-async function as<T = Record<string, unknown>>(who: U | null, sql: string, params: unknown[] = []): Promise<T[]> {
-  await db.exec('reset role');
-  if (who) {
-    const u = users[who];
-    await db.query(`select set_config('request.jwt.claim.sub', $1, false), set_config('request.jwt.claims', $2, false)`, [u.id, JSON.stringify({ sub: u.id, email: u.email })]);
-    await db.exec('set role authenticated');
-  } else {
-    await db.query(`select set_config('request.jwt.claim.sub', '', false), set_config('request.jwt.claims', '', false)`);
-    await db.exec('set role anon');
-  }
-  try {
-    return (await db.query<T>(sql, params)).rows;
-  } finally {
-    await db.exec('reset role');
-  }
-}
-
-async function fails(who: U | null, sql: string, params: unknown[] = []): Promise<string> {
-  try {
-    await as(who, sql, params);
-  } catch (e) {
-    return (e as Error).message;
-  }
-  throw new Error(`Expected failure: ${sql}`);
-}
+let as: TestDb<U>['as'];
+let fails: TestDb<U>['fails'];
+let t: TestDb<U>;
 
 beforeAll(async () => {
-  db = await PGlite.create();
-  await db.exec(SUPABASE_STUB);
-  await db.exec(readFileSync(MIGRATION_PATH, 'utf8'));
-  for (const u of Object.values(users)) await db.query('insert into auth.users (id, email) values ($1, $2)', [u.id, u.email]);
+  t = await bootDb(users);
+  ({ pg: db, as, fails } = t);
 
   await as('ownerA', `select public.create_company('Alpha Electric', 'SK', 'Alex Owner')`);
   await as('ownerB', `select public.create_company('Bravo Power', 'AB', 'Bea Owner')`);
@@ -97,7 +58,7 @@ describe('tenant isolation', () => {
   it('anonymous visitors and users without a company see nothing', async () => {
     expect(await fails(null, 'select * from public.estimates')).toMatch(/permission denied/);
     expect(await as('stranger', 'select * from public.estimates')).toEqual([]);
-    expect(await as('stranger', 'select * from public.companies')).toEqual([]);
+    expect(await as('stranger', 'select id from public.companies')).toEqual([]);
     expect(await fails('stranger', `insert into public.estimates (title, status) values ('x', 'Draft')`)).toMatch(/null value|row-level security/);
   });
 
@@ -120,10 +81,10 @@ describe('roles', () => {
   });
 
   it('electricians only see their own timecards; PMs see all', async () => {
-    await as('elecA', `insert into public.timecards (title, status, employee_name) values ('Job 1', 'Submitted', 'Sam')`);
-    await as('ownerA', `insert into public.timecards (title, status, employee_name) values ('Job 1', 'Submitted', 'Alex')`);
-    expect((await as<{ employee_name: string }>('elecA', 'select employee_name from public.timecards')).map((r) => r.employee_name)).toEqual(['Sam']);
-    expect((await as('pmA', 'select * from public.timecards')).length).toBe(2);
+    await as('elecA', `insert into public.timecards (title, status, employee_name, regular_hours) values ('Job 1', 'Submitted', 'Sam', 8)`);
+    await as('ownerA', `insert into public.timecards (title, status, employee_name, regular_hours) values ('Job 1', 'Submitted', 'Alex', 8)`);
+    expect((await as<{ employee_name: string }>('elecA', 'select employee_name from public.timecards')).map((r) => r.employee_name)).toEqual(['Sam Sparky']); // an electrician's card carries their real name, whatever was typed
+    expect((await as('pmA', 'select id from public.timecards')).length).toBe(2);
     expect((await as('elecA', `update public.timecards set status = 'Approved' where employee_name = 'Alex' returning id`)).length).toBe(0);
   });
 
@@ -157,6 +118,17 @@ describe('roles', () => {
   });
 });
 
+describe('trial email tables', () => {
+  it('are hidden from users and visitors', async () => {
+    await db.exec(`insert into public.email_unsubscribes (email) values ('owner@alpha.ca')`);
+    for (const t of ['trial_emails', 'email_unsubscribes']) {
+      expect(await fails('ownerA', `select * from public.${t}`)).toMatch(/permission denied/);
+      expect(await fails(null, `select * from public.${t}`)).toMatch(/permission denied/);
+    }
+    expect(await fails('ownerA', 'delete from public.email_unsubscribes')).toMatch(/permission denied/);
+  });
+});
+
 describe('invitations', () => {
   it('only the invited email can accept, and only once', async () => {
     await as('ownerB', `insert into public.invitations (company_id, email, role) values (public.user_company_id(), 'someone@bravo.ca', 'foreman')`);
@@ -174,8 +146,10 @@ describe('company profile and estimate defaults', () => {
   it('owners edit the profile; others cannot', async () => {
     await as('ownerA', `update public.companies set default_markup = 20, default_terms = 'Net 30', phone = '306-555-0100'`);
     await as('pmA', `update public.companies set default_markup = 99`);
-    const [c] = await as<{ default_markup: string; phone: string }>('ownerA', 'select default_markup, phone from public.companies');
-    expect(Number(c.default_markup)).toBe(20);
+    // The markup and labour rate are closed to every signed-in user and come from company_rates
+    const [c] = await as<{ phone: string }>('ownerA', 'select phone from public.companies');
+    const [{ r: rates }] = await as<{ r: { default_markup: string } }>('ownerA', 'select public.company_rates() as r');
+    expect(Number(rates.default_markup)).toBe(20);
     expect(c.phone).toBe('306-555-0100');
     await expect(as('ownerA', `update public.companies set trial_ends_at = now() + interval '10 years'`)).rejects.toThrow(/permission denied/);
   });
@@ -206,7 +180,8 @@ describe('estimate line items', () => {
     await as('pmA', 'select public.save_estimate_items($1, $2::jsonb, $3)', [estimate, items, 1234.567]);
     const rows = await as<{ description: string; sort: number }>('pmA', 'select description, sort from public.estimate_items where estimate_id = $1 order by sort', [estimate]);
     expect(rows).toEqual([{ description: 'EMT 3/4', sort: 0 }, { description: 'Panel', sort: 1 }]);
-    expect(Number((await as<{ total_amount: string }>('pmA', 'select total_amount from public.estimates where id = $1', [estimate]))[0].total_amount)).toBe(1234.57);
+    // The total sent is ignored: the database works it out from the lines and the company's default rates
+    expect(Number((await as<{ total_amount: string }>('pmA', 'select total_amount from public.estimates where id = $1', [estimate]))[0].total_amount)).not.toBe(1234.57);
 
     await as('pmA', 'select public.save_estimate_items($1, $2::jsonb, $3)', [estimate, JSON.stringify([{ description: 'Only', quantity: 1 }]), 10]);
     expect((await as('pmA', 'select 1 from public.estimate_items where estimate_id = $1', [estimate])).length).toBe(1);
@@ -306,5 +281,96 @@ describe('subscription gating', () => {
     for (let i = 0; i < 41; i++) results.push((await as<{ allowed: boolean }>('elecA', 'select * from public.consume_ai_message()'))[0].allowed);
     expect(results.slice(0, 40).every(Boolean)).toBe(true);
     expect(results[40]).toBe(false);
+  });
+});
+
+describe('links between records', () => {
+  let projectA: string;
+  let projectB: string;
+  let clientA: string;
+  let clientB: string;
+  let poA: string;
+  let poB: string;
+
+  beforeAll(async () => {
+    [{ id: projectA }] = await as<{ id: string }>('ownerA', `insert into public.projects (title, status) values ('Alpha job', 'Active') returning id`);
+    [{ id: projectB }] = await as<{ id: string }>('ownerB', `insert into public.projects (title, status) values ('Bravo job', 'Active') returning id`);
+    [{ id: clientA }] = await as<{ id: string }>('ownerA', `insert into public.crm (title, status) values ('Alpha client', 'Lead') returning id`);
+    [{ id: clientB }] = await as<{ id: string }>('ownerB', `insert into public.crm (title, status) values ('Bravo client', 'Lead') returning id`);
+    [{ id: poA }] = await as<{ id: string }>('ownerA', `insert into public.purchase_orders (title, status) values ('PO A', 'Issued') returning id`);
+    [{ id: poB }] = await as<{ id: string }>('ownerB', `insert into public.purchase_orders (title, status) values ('PO B', 'Issued') returning id`);
+  });
+
+  it('a record can link to its own company\'s project and client', async () => {
+    const [row] = await as<{ project_id: string; client_id: string }>('ownerA', `insert into public.invoices (title, status, project_id, client_id) values ('INV 1', 'Draft', $1, $2) returning project_id, client_id`, [projectA, clientA]);
+    expect(row).toEqual({ project_id: projectA, client_id: clientA });
+    // An electrician can link field records too, though they can't read the client list
+    const [log] = await as<{ project_id: string }>('elecA', `insert into public.field_logs (title, status, project_id) values ('Note', 'Logged', $1) returning project_id`, [projectA]);
+    expect(log.project_id).toBe(projectA);
+  });
+
+  it('rejects another company\'s project and client on insert', async () => {
+    expect(await fails('ownerA', `insert into public.rfis (title, status, project_id) values ('Q', 'Open', $1)`, [projectB])).toMatch(/project you picked could not be found/);
+    expect(await fails('ownerA', `insert into public.estimates (title, status, client_id) values ('E', 'Draft', $1)`, [clientB])).toMatch(/client you picked could not be found/);
+    expect(await fails('ownerA', `insert into public.payables (title, status, purchase_order_id) values ('Bill', 'To Approve', $1)`, [poB])).toMatch(/purchase order you picked could not be found/);
+  });
+
+  it('rejects another company\'s project and client on update', async () => {
+    const [{ id }] = await as<{ id: string }>('ownerA', `insert into public.projects (title, status, client_id) values ('Linked', 'Active', $1) returning id`, [clientA]);
+    expect(await fails('ownerA', 'update public.projects set client_id = $1 where id = $2', [clientB, id])).toMatch(/client you picked could not be found/);
+    const [{ id: rfi }] = await as<{ id: string }>('ownerA', `insert into public.rfis (title, status, project_id) values ('Q2', 'Open', $1) returning id`, [projectA]);
+    expect(await fails('ownerA', 'update public.rfis set project_id = $1 where id = $2', [projectB, rfi])).toMatch(/project you picked could not be found/);
+    expect((await as<{ project_id: string }>('ownerA', 'select project_id from public.rfis where id = $1', [rfi]))[0].project_id).toBe(projectA);
+  });
+
+  it('answers the same for an id that does not exist, so a guess learns nothing', async () => {
+    const missing = '99999999-9999-4999-8999-999999999999';
+    expect(await fails('ownerA', `insert into public.rfis (title, status, project_id) values ('Q', 'Open', $1)`, [missing])).toMatch(/project you picked could not be found/);
+  });
+
+  it('the server\'s service role is held to the same rule', async () => {
+    const [{ id: company }] = await as<{ id: string }>('ownerA', 'select id from public.companies');
+    await expect(t.asService(`insert into public.rfis (company_id, title, status, project_id) values ($1, 'Q', 'Open', $2)`, [company, projectB])).rejects.toThrow(/could not be found/);
+    const [row] = await t.asService<{ project_id: string }>(`insert into public.rfis (company_id, title, status, project_id) values ($1, 'Service', 'Open', $2) returning project_id`, [company, projectA]);
+    expect(row.project_id).toBe(projectA);
+  });
+
+  it('clearing a link and editing other fields still work', async () => {
+    const [{ id }] = await as<{ id: string }>('ownerA', `insert into public.payables (title, status, project_id, purchase_order_id) values ('Bill', 'To Approve', $1, $2) returning id`, [projectA, poA]);
+    await as('ownerA', `update public.payables set title = 'Bill 2' where id = $1`, [id]);
+    await as('ownerA', 'update public.payables set project_id = null, purchase_order_id = null where id = $1', [id]);
+    expect((await as<{ project_id: null }>('ownerA', 'select project_id from public.payables where id = $1', [id]))[0].project_id).toBeNull();
+  });
+
+  it('a project or client with linked records cannot be deleted until they move', async () => {
+    const [{ id: project }] = await as<{ id: string }>('ownerA', `insert into public.projects (title, status) values ('Delete me', 'Active') returning id`);
+    const [{ id: rfi }] = await as<{ id: string }>('ownerA', `insert into public.rfis (title, status, project_id) values ('Q3', 'Open', $1) returning id`, [project]);
+    expect(await fails('ownerA', 'delete from public.projects where id = $1', [project])).toMatch(/foreign key/);
+    await as('ownerA', 'update public.rfis set project_id = null where id = $1', [rfi]);
+    expect((await as('ownerA', 'delete from public.projects where id = $1 returning id', [project])).length).toBe(1);
+  });
+
+  it('deleting a whole company removes its linked records with it', async () => {
+    await as('stranger', `select public.create_company('Short Lived', 'MB', 'Sid')`);
+    const [{ id: company }] = await as<{ id: string }>('stranger', 'select id from public.companies');
+    const [{ id: project }] = await as<{ id: string }>('stranger', `insert into public.projects (title, status) values ('Job', 'Active') returning id`);
+    await as('stranger', `insert into public.rfis (title, status, project_id) values ('Q', 'Open', $1)`, [project]);
+    await t.asService('delete from public.companies where id = $1', [company]);
+    expect((await t.asSystem('select 1 from public.rfis where company_id = $1', [company])).length).toBe(0);
+    await t.asSystem('delete from public.company_users where user_id = $1', [users.stranger.id]);
+  });
+});
+
+describe('company settings added by the registry sync', () => {
+  it('start at their defaults and the owner can change them', async () => {
+    const [c] = await as<{ overtime_multiplier: string; default_holdback_pct: string }>('ownerB', 'select overtime_multiplier, default_holdback_pct from public.companies');
+    expect(Number(c.overtime_multiplier)).toBe(1.5);
+    expect(Number(c.default_holdback_pct)).toBe(10);
+    await as('ownerB', 'update public.companies set overtime_multiplier = 2, default_holdback_pct = 7.5');
+    const [d] = await as<{ overtime_multiplier: string }>('ownerB', 'select overtime_multiplier from public.companies');
+    expect(Number(d.overtime_multiplier)).toBe(2);
+    expect(await fails('ownerB', 'update public.companies set overtime_multiplier = 0.5')).toMatch(/check constraint/);
+    expect(await fails('ownerB', 'update public.companies set default_holdback_pct = 101')).toMatch(/check constraint/);
+    await as('ownerB', 'update public.companies set overtime_multiplier = 1.5, default_holdback_pct = 10');
   });
 });

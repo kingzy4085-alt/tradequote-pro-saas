@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { getModule } from '@/lib/modules';
 import { hasRank } from '@/lib/roles';
 import { uuidSchema } from '@/lib/validation';
@@ -10,19 +10,20 @@ export const metadata = { title: 'Estimate · TradeQuote PRO' };
 
 export default async function EstimatePage({ params }: { params: { id: string } }) {
   if (!uuidSchema.safeParse(params.id).success) notFound();
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') notFound();
   const { ctx } = result;
   const mod = getModule('estimates')!;
   if (!hasRank(ctx.role, mod.read)) notFound();
 
-  const [{ data: estimate }, { data: items }] = await Promise.all([
+  const [{ data: estimate }, { data: items }, { data: proposal }] = await Promise.all([
     ctx.supabase.from('estimates').select('*').eq('id', params.id).maybeSingle(),
     ctx.supabase
       .from('estimate_items')
       .select('description, quantity, unit, material_unit_cost, labour_hours_per_unit')
       .eq('estimate_id', params.id)
       .order('sort'),
+    ctx.supabase.from('proposals').select('id, status').eq('estimate_id', params.id).maybeSingle(),
   ]);
   if (!estimate) notFound();
 
@@ -31,6 +32,7 @@ export default async function EstimatePage({ params }: { params: { id: string } 
       estimate={estimate}
       initialItems={items ?? []}
       statuses={mod.statuses}
+      proposal={proposal}
       canWrite={ctx.canWrite && hasRank(ctx.role, mod.write)}
     />
   );

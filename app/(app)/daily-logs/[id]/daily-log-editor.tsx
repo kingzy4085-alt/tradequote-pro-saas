@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import SignaturePad from '@/components/signature-pad';
 import { Alert, Button, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { JOB_PHOTOS_BUCKET, MAX_PHOTOS, photoFolder } from '@/lib/daily-log';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
-import SignaturePad from './signature-pad';
 
 export interface DailyLog {
   id: string;
@@ -140,7 +140,10 @@ export default function DailyLogEditor({
         const ext = blob.type === 'image/jpeg' ? 'jpg' : (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
         const path = `${photoFolder(log.company_id, log.id)}${crypto.randomUUID()}.${ext}`;
         const { error: uploadError } = await storage.upload(path, blob, { contentType: blob.type || file.type });
-        if (uploadError) throw new Error(`Photo not uploaded: ${uploadError.message}`);
+        if (uploadError) {
+          console.error('Photo upload failed', uploadError);
+          throw new Error('That photo could not be uploaded. Use a JPEG, PNG, WEBP or HEIC file under 10 MB.');
+        }
         added.push(path);
       }
       await action({ action: 'photos', photos: [...log.photos, ...added] });

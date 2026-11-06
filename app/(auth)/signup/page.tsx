@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [resent, setResent] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -36,10 +37,57 @@ export default function SignupPage() {
     }
   }
 
+  async function resend() {
+    setLoading(true);
+    setError('');
+    setResent(false);
+    const { error } = await getSupabaseBrowserClient().auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding` },
+    });
+    setLoading(false);
+    if (error) return setError(error.message);
+    setResent(true);
+  }
+
   if (sent) {
     return (
-      <AuthCard title="Check your email" subtitle={`We sent a confirmation link to ${email}.`}>
+      <AuthCard
+        title="Check your email"
+        subtitle={`We sent a confirmation link to ${email}.`}
+        footer={
+          <Link href="/login" className="text-amber-400 hover:underline">
+            Back to sign in
+          </Link>
+        }
+      >
         <p className="text-sm text-slate-300">Open the link on this device to finish setting up your company. It can take a minute to arrive — check spam if you don't see it.</p>
+        {error && (
+          <div className="mt-4">
+            <Alert>{error}</Alert>
+          </div>
+        )}
+        {resent && (
+          <div className="mt-4">
+            <Alert tone="success">Sent again.</Alert>
+          </div>
+        )}
+        <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <Button variant="secondary" disabled={loading} onClick={resend}>
+            {loading ? 'Sending...' : 'Send it again'}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSent(false);
+              setError('');
+              setResent(false);
+            }}
+          >
+            Use a different email
+          </Button>
+        </div>
       </AuthCard>
     );
   }
@@ -56,7 +104,7 @@ export default function SignupPage() {
           </Link>
           {' · '}
           <Link href="/pricing" className="text-amber-400 hover:underline">
-            See plans
+            See pricing
           </Link>
         </>
       }

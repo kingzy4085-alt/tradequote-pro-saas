@@ -29,7 +29,19 @@ export default function PrivacyPage() {
       <h2>Your company&apos;s data</h2>
       <p>Each company&apos;s records are isolated from every other company. Your company&apos;s owner and admins control who on your team can see which records.</p>
       <h2>Retention</h2>
-      <p>We keep your data while your account is active and for [period] after cancellation, unless the law requires longer. You can request deletion at any time.</p>
+      <p>
+        We keep your company&apos;s records while your account is active. Cancelling does not delete them: they stay, read-only, until you ask us to delete them, unless the law requires us to keep them longer. You can request
+        deletion at any time.
+      </p>
+      <p>Some housekeeping records are removed automatically on a schedule:</p>
+      <ul>
+        <li>Invitations nobody accepted: 30 days after they expire.</li>
+        <li>Payment event records from Stripe: 90 days.</li>
+        <li>Alerts that have been resolved: 90 days after they are resolved.</li>
+        <li>Records of which digest emails were sent: 90 days.</li>
+        <li>Daily AI Assistant usage counts and automation run logs: 13 months.</li>
+        <li>Automation event logs: 24 months.</li>
+      </ul>
       <h2>Your rights</h2>
       <p>You can ask to access or correct your personal information, or withdraw consent, by contacting our Privacy Officer at [privacy email]. You may also contact the Office of the Privacy Commissioner of Canada.</p>
       <h2>Contact</h2>
