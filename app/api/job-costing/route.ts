@@ -1,33 +1,18 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { dbError, jsonError, requireApi } from '@/lib/api';
+import { getModule } from '@/lib/modules';
+import { uuidSchema } from '@/lib/validation';
 
-export async function GET() {
-  try {
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: [] }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('job-costing').select('*').order('created_at', { ascending: false });
-    if (error) {
-      return NextResponse.json({ success: true, data: [] }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data: data || [] }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: [] }, { status: 200 });
-  }
-}
+export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: body }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('job-costing').insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, data: body }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: body }, { status: 200 });
-  }
+// Every job's budget, actuals, billing and margin, or one job's with ?project=
+export async function GET(request: Request) {
+  const project = new URL(request.url).searchParams.get('project');
+  if (project && !uuidSchema.safeParse(project).success) return jsonError(404, 'Not found');
+  const ctx = await requireApi({ minRank: getModule('job-costing')!.read });
+  if (ctx instanceof Response) return ctx;
+
+  const { data, error } = await ctx.supabase.rpc('job_cost_rollup', project ? { p_project: project } : {});
+  if (error) return dbError(error, 'loading job costs');
+  return NextResponse.json({ data });
 }

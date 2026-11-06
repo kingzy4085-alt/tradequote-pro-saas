@@ -1,0 +1,28 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/trial-emails",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/automation",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/automation",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/digest",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/status",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/job-costs",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

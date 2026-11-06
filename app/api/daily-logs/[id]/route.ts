@@ -1,51 +1,43 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
+import { DailyLogAction, photoFolder } from '@/lib/daily-log';
+import { getModule } from '@/lib/modules';
+import { uuidSchema } from '@/lib/validation';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params;
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: { id, message: 'Mock single record' } }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('daily-logs').select('*').eq('id', id).single();
-    if (error) {
-      return NextResponse.json({ success: true, data: { id, name: 'Mock Record' } }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: { id: params.id } }, { status: 200 });
-  }
-}
+export const dynamic = 'force-dynamic';
 
+const dailyLogs = getModule('daily-logs')!;
+
+// Photos, sign-off and reopening. Plain field edits go through /api/modules/daily-logs/[id].
+// The database enforces the rules too: a signed log is locked, and only a foreman or above can reopen it.
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params;
-    const body = await request.json().catch(() => ({}));
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: { id, ...body } }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('daily-logs').update(body).eq('id', id).select();
-    if (error) {
-      return NextResponse.json({ success: true, data: { id, ...body } }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: { id: params.id, ...body } }, { status: 200 });
-  }
-}
+  if (!uuidSchema.safeParse(params.id).success) return jsonError(404, 'Not found');
+  const ctx = await requireApi({ minRank: dailyLogs.write, write: true });
+  if (ctx instanceof Response) return ctx;
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  let body: unknown;
   try {
-    const { id } = params;
-    if (!supabase) {
-      return NextResponse.json({ success: true, message: 'Mock record deleted' }, { status: 200 });
-    }
-    const { error } = await supabase.from('daily-logs').delete().eq('id', id);
-    if (error) {
-      return NextResponse.json({ success: true, message: 'Record deleted successfully' }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, message: 'Record deleted successfully' }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, message: 'Record deleted successfully' }, { status: 200 });
+    body = await readJson(request, 400_000);
+  } catch (err) {
+    return jsonError(err instanceof RangeError ? 413 : 400, err instanceof RangeError ? 'Request too large' : 'Invalid JSON');
   }
+  const parsed = DailyLogAction.safeParse(body);
+  if (!parsed.success) return jsonError(400, parsed.error.issues[0]?.message ?? 'Invalid request');
+  const action = parsed.data;
+
+  let update: Record<string, unknown>;
+  if (action.action === 'photos') {
+    const folder = photoFolder(ctx.company.id, params.id);
+    if (action.photos.some((p) => !p.startsWith(folder) || p.includes('..'))) return jsonError(400, 'Invalid photo');
+    update = { photos: action.photos };
+  } else if (action.action === 'sign') {
+    update = { signed_by: action.signed_by, signature: action.signature, signed_at: new Date().toISOString() };
+  } else {
+    update = { signed_by: null, signature: null, signed_at: null };
+  }
+
+  const { data, error } = await ctx.supabase.from(dailyLogs.table).update(update).eq('id', params.id).select().maybeSingle();
+  if (error) return dbError(error, 'updating the daily log');
+  if (!data) return jsonError(404, 'Not found');
+  return NextResponse.json({ data });
 }

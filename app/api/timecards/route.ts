@@ -1,33 +1,47 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
+import { ROLE_RANK } from '@/lib/roles';
+import { CrewEntrySchema, crewRows, firstIssue, resolveWorker, type Worker } from '@/lib/timecards';
 
-export async function GET() {
-  try {
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: [] }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('timecards').select('*').order('created_at', { ascending: false });
-    if (error) {
-      return NextResponse.json({ success: true, data: [] }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data: data || [] }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: [] }, { status: 200 });
-  }
-}
+export const dynamic = 'force-dynamic';
 
+/** Enters time for a whole crew in one step: all the cards are saved, or none are. */
 export async function POST(request: Request) {
+  const ctx = await requireApi({ minRank: 1, write: true });
+  if (ctx instanceof Response) return ctx;
+
+  let body: unknown;
   try {
-    const body = await request.json().catch(() => ({}));
-    if (!supabase) {
-      return NextResponse.json({ success: true, data: body }, { status: 200 });
-    }
-    const { data, error } = await supabase.from('timecards').insert([body]).select();
-    if (error) {
-      return NextResponse.json({ success: true, data: body }, { status: 200 });
-    }
-    return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
-  } catch (error: any) {
-    return NextResponse.json({ success: true, data: body }, { status: 200 });
+    body = await readJson(request);
+  } catch (err) {
+    return err instanceof RangeError ? jsonError(413, 'Request too large') : jsonError(400, 'Invalid JSON');
   }
+  const parsed = CrewEntrySchema.safeParse(body);
+  if (!parsed.success) return jsonError(400, firstIssue(parsed.error));
+  const entry = parsed.data;
+
+  const rank = ROLE_RANK[ctx.role];
+  const { data: workerRows, error: workersError } = await ctx.supabase.rpc('timecard_workers');
+  if (workersError) return dbError(workersError, 'loading your crew');
+  const workers = (workerRows ?? []) as Worker[];
+
+  const resolved: Worker[] = [];
+  for (const row of entry.entries) {
+    const worker = resolveWorker(row, workers, rank);
+    if (!worker) return jsonError(400, 'Pick each worker from the list, or type their name.');
+    resolved.push(worker);
+  }
+
+  // The card keeps the job's name as it was, for the payroll file
+  let title = entry.job;
+  if (entry.project_id) {
+    const { data: project, error } = await ctx.supabase.from('projects').select('title').eq('id', entry.project_id).maybeSingle();
+    if (error) return dbError(error, 'loading the project');
+    if (!project) return jsonError(400, 'Pick the project from the list.');
+    title = project.title as string;
+  }
+
+  const { data, error } = await ctx.supabase.from('timecards').insert(crewRows(entry, title!, resolved)).select('id');
+  if (error) return dbError(error, 'saving timecards');
+  return NextResponse.json({ saved: data?.length ?? 0 }, { status: 201 });
 }

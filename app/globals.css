@@ -30,7 +30,13 @@ body {
 }
 
 /* High contrast sunlight-readable borders and focus states */
-.dark input:focus, .dark select:focus, .dark textarea:focus {
+input:focus, select:focus, textarea:focus {
   outline: 2px solid #f59e0b !important; /* Amber-500 high visibility */
   border-color: #f59e0b !important;
+}
+
+@media print {
+  @page { size: letter; margin: 0.6in; }
+  html, body { background: #fff !important; color: #000; }
+  input, textarea, select { color: #000 !important; background: #fff !important; border-color: #999 !important; }
 }
