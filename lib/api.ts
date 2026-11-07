@@ -31,6 +31,10 @@ export function dbError(error: { code?: string; message: string }, action: strin
   console.error(`Database error while ${action}:`, error);
   if (error.code === '42501') return jsonError(403, 'You do not have permission to do that');
   if (error.code === '23505') return jsonError(409, 'That record already exists');
+  // Rules the database enforces itself (e.g. a signed daily log) raise P0001 with a message meant for the user
+  if (error.code === 'P0001') return jsonError(409, error.message);
+  if (error.code === 'P0002') return jsonError(404, 'Not found');
+  if (error.code === '22023') return jsonError(400, error.message);
   if (error.code === '23502' || error.code === '23514' || error.code === '22P02' || error.code === '22007') {
     return jsonError(400, 'Some values were not valid');
   }

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- TradeQuote PRO — trial onboarding emails
--- Run after 20261101000000_saas_core.sql. Both tables are written only by the
+-- Run after 20261101000000_saas_core.sql (and the job-photos storage migration). Both tables are written only by the
 -- server (service role) from the daily /api/cron/trial-emails job and the
 -- unsubscribe link; signed-in users can't read or change them.
 -- ============================================================================

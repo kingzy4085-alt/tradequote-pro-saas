@@ -39,6 +39,10 @@ function LoginForm() {
           <Link href="/signup" className="text-amber-400 hover:underline">
             Start a free 14-day trial
           </Link>
+          {' · '}
+          <Link href="/pricing" className="text-amber-400 hover:underline">
+            See plans
+          </Link>
         </>
       }
     >

@@ -53,9 +53,9 @@ export default function AppShell({ groups, companyName, userLabel, canWrite, tri
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 lg:flex">
+    <div className="min-h-screen bg-slate-950 text-slate-100 lg:flex print:block print:bg-white print:text-black">
       {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3">
+      <header className="print:hidden lg:hidden sticky top-0 z-40 flex items-center justify-between bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3">
         <Link href="/" className="font-extrabold tracking-tight text-white">
           TradeQuote <span className="text-amber-500">PRO</span>
         </Link>
@@ -77,7 +77,7 @@ export default function AppShell({ groups, companyName, userLabel, canWrite, tri
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 h-screen sticky top-0 border-r border-slate-800 bg-slate-950">
+      <aside className="hidden print:!hidden lg:flex lg:flex-col w-64 shrink-0 h-screen sticky top-0 border-r border-slate-800 bg-slate-950">
         <div className="px-6 py-5 border-b border-slate-800">
           <Link href="/" className="text-lg font-extrabold tracking-tight text-white">
             TradeQuote <span className="text-amber-500">PRO</span>
@@ -94,7 +94,7 @@ export default function AppShell({ groups, companyName, userLabel, canWrite, tri
 
       <div className="flex-1 min-w-0">
         {!canWrite && (
-          <div role="alert" className="bg-red-500/10 border-b border-red-500/30 px-4 py-3 text-sm text-red-300">
+          <div role="alert" className="print:hidden bg-red-500/10 border-b border-red-500/30 px-4 py-3 text-sm text-red-300">
             Your trial or subscription has ended — records are read-only.{' '}
             {canManageBilling ? (
               <Link href="/settings/billing" className="font-semibold underline">
@@ -106,7 +106,7 @@ export default function AppShell({ groups, companyName, userLabel, canWrite, tri
           </div>
         )}
         {canWrite && trialDaysLeft !== null && trialDaysLeft <= 7 && (
-          <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 text-sm text-amber-200">
+          <div className="print:hidden bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 text-sm text-amber-200">
             {trialDaysLeft === 0 ? 'Your trial ends today.' : `${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} left in your free trial.`}{' '}
             {canManageBilling && (
               <Link href="/settings/billing" className="font-semibold underline">

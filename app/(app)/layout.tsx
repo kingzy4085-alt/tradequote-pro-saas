@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       items: [
         { href: '/', label: 'Command Center' },
         { href: '/assistant', label: 'AI Assistant' },
+        { href: '/help', label: 'How to Use' },
       ],
     },
     ...MODULE_GROUPS.map((group) => ({
@@ -27,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     {
       label: 'Company',
       items: [
+        { href: '/settings/company', label: 'Company Profile' },
         ...(hasRank(ctx.role, 4) ? [{ href: '/settings/team', label: 'Team' }] : []),
         ...(hasRank(ctx.role, 4) ? [{ href: '/settings/billing', label: 'Billing' }] : []),
         { href: '/settings/account', label: 'My Account' },
