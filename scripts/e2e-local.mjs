@@ -147,7 +147,7 @@ async function main() {
   must('creating the company', await POST(owner, '/api/onboarding', { action: 'create', fullName: owner.name, companyName: `E2E Electric ${RUN}`, province: 'SK' }), 200);
   const companyId = ok('reading the company id', await owner.db.from('company_users').select('company_id').eq('user_id', owner.id).single()).company_id;
   created.companies.push(companyId);
-  must('company defaults', await PATCH(owner, '/api/company', { default_labour_rate: 95, default_markup: 15, default_tax: 5, default_holdback_pct: 10, overtime_multiplier: 1.5 }), 200);
+  must('company defaults', await PATCH(owner, '/api/company', { default_labour_rate: 95, default_markup: 15, default_tax: 5, default_holdback_pct: 10, overtime_multiplier: 1.5, tax_number: '12345 6789 RT0001' }), 200);
   check('a PM cannot change the company', (await PATCH(pm, '/api/company', { default_tax: 1 })).status >= 400);
 
   for (const [person, role] of [[pm, 'project_manager'], [foreman, 'foreman'], [electrician, 'electrician']]) {
@@ -643,6 +643,8 @@ async function main() {
     check(`no page falls over for ${who.tag}`, bad.length === 0, bad);
   }
   const pageText = async (who, path) => (await fetch(`${S.app}${path}`, { headers: { cookie: who.cookie }, redirect: 'manual' })).text();
+  check('the printed invoice carries the GST/HST number', (await pageText(owner, `/print/invoice/${invoiceId}`)).includes('GST/HST No. 12345 6789 RT0001'));
+  check('so does the printed proposal', (await pageText(pm, `/print/proposal/${proposalId}`)).includes('GST/HST No. 12345 6789 RT0001'));
   const home = await pageText(owner, '/');
   check('the Command Center shows win rate and follow-ups', home.includes('Win Rate') && home.includes('Follow-ups Due'));
   const board = await pageText(pm, '/pipeline');

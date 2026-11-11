@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import type { AppContext } from '@/lib/context';
 
 // Columns of the companies row that print pages show. Only what a client may see.
-const LETTERHEAD_COLUMNS = 'name, province, contact, phone, email, address, default_terms';
+const LETTERHEAD_COLUMNS = 'name, province, contact, phone, email, address, tax_number, default_terms';
 
 export interface LetterheadCompany {
   name: string;
@@ -10,6 +10,8 @@ export interface LetterheadCompany {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  /** GST/HST registration number. A Canadian customer needs it on an invoice to claim the tax back. */
+  tax_number?: string | null;
   default_terms?: string | null;
 }
 
@@ -27,6 +29,7 @@ export function Letterhead({ company, document, children }: { company: Letterhea
         <h1 className="text-2xl font-bold text-black">{company.name}</h1>
         {company.address && <p>{company.address}</p>}
         <p>{[company.contact, company.phone, company.email].filter(Boolean).join(' · ')}</p>
+        {company.tax_number && <p>GST/HST No. {company.tax_number}</p>}
       </div>
       <div className="text-right">
         <p className="text-xl font-bold text-black uppercase tracking-wide">{document}</p>

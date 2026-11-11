@@ -11,6 +11,7 @@ export interface Profile {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  tax_number?: string | null;
   default_markup?: number | string | null;
   default_tax?: number | string | null;
   default_labour_rate?: number | string | null;
@@ -19,7 +20,7 @@ export interface Profile {
   default_holdback_pct?: number | string | null;
 }
 
-const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms', 'overtime_multiplier', 'default_holdback_pct'] as const;
+const KEYS = ['name', 'province', 'contact', 'phone', 'email', 'address', 'tax_number', 'default_markup', 'default_tax', 'default_labour_rate', 'default_terms', 'overtime_multiplier', 'default_holdback_pct'] as const;
 type Form = Record<(typeof KEYS)[number], string>;
 
 export default function CompanyForm({ initial, canEdit, canSeeRates = canEdit }: { initial: Profile; canEdit: boolean; /** The markup and labour rate are for project managers and up. */ canSeeRates?: boolean }) {
@@ -69,6 +70,7 @@ export default function CompanyForm({ initial, canEdit, canSeeRates = canEdit }:
           {field('phone', 'Phone', 'tel')}
           {field('email', 'Email', 'email')}
           {field('address', 'Address')}
+          {field('tax_number', 'GST/HST number (printed on invoices)')}
           <div>
             <Label htmlFor="province">Province</Label>
             <Select id="province" options={PROVINCES.map((p) => p.code)} value={form.province} disabled={!canEdit} onChange={(e) => set('province', e.target.value)} />
