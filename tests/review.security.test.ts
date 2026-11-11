@@ -339,8 +339,8 @@ describe('seams that hold: grants and row security', () => {
       expect(/user_company_id|user_rank|auth\.uid\(\)|auth\.jwt\(\)/.test(f.prosrc), `${f.sig} has no company check`).toBe(true);
     }
     expect(callable.map((f) => f.proname).sort()).toEqual([
-      'accept_invitation', 'change_order_money', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
-      'pending_invitations', 'project_money', 'remove_member', 'safety_photo_open', 'seed_job_budget_from_estimate', 'set_job_budget', 'set_job_closed', 'set_member_role', 'timecard_pay', 'timecard_workers', 'user_company_id', 'user_rank',
+      'accept_invitation', 'change_order_money', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'create_proposal_share', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
+      'pending_invitations', 'project_money', 'remove_member', 'revoke_proposal_share', 'safety_photo_open', 'seed_job_budget_from_estimate', 'set_job_budget', 'set_job_closed', 'set_member_role', 'timecard_pay', 'timecard_workers', 'user_company_id', 'user_rank',
     ]);
   });
 
@@ -385,8 +385,14 @@ describe('seams that hold: routes and the service role', () => {
       'app/api/team/route.ts',
       'lib/automation.ts',
       'lib/env.ts',
+      // The client portal: a visitor has no session, so its two database calls go through here and nowhere else
+      'lib/portal-server.ts',
       'lib/supabase/server.ts',
     ]);
+    // What that file may do with the service role: rate limits and the two portal functions. No table access.
+    const portal = readFileSync('lib/portal-server.ts', 'utf8');
+    expect(portal).not.toMatch(/\.from\(/);
+    expect([...portal.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['portal_decide', 'portal_view']);
   });
 
   it('no browser component imports the server client or the automation jobs', () => {
@@ -396,13 +402,19 @@ describe('seams that hold: routes and the service role', () => {
   });
 
   it('every route says who may call it', () => {
-    const open = new Set(['app/api/health/route.ts', 'app/api/leads/route.ts', 'app/api/email/unsubscribe/route.ts', 'app/api/stripe/webhook/route.ts']);
+    const open = new Set(['app/api/health/route.ts', 'app/api/leads/route.ts', 'app/api/email/unsubscribe/route.ts', 'app/api/stripe/webhook/route.ts', 'app/api/portal/[token]/route.ts']);
     for (const { path, src } of routes) {
       if (open.has(path)) continue;
       expect(/requireApi\(|requireCron\(|auth\.getUser\(|from '@\/lib\/crud'/.test(src), path).toBe(true);
     }
     expect(routes.find((r) => r.path.endsWith('stripe/webhook/route.ts'))!.src).toContain('constructEvent');
     expect(routes.find((r) => r.path.endsWith('email/unsubscribe/route.ts'))!.src).toContain('verifyUnsubscribeToken');
+    // The client portal's credential is the link's token: checked before anything else, then rate-limited and looked up by its hash
+    const portalRoute = routes.find((r) => r.path.endsWith('portal/[token]/route.ts'))!.src;
+    expect(portalRoute.indexOf('isPortalToken(params.token)')).toBeGreaterThan(-1);
+    expect(portalRoute.indexOf('isPortalToken(params.token)')).toBeLessThan(portalRoute.indexOf('readJson('));
+    expect(portalRoute).toContain('answerPortal(');
+    expect(portalRoute).not.toMatch(/createSupabase|\.from\(|\.rpc\(/);
   });
 
   it('every write route is closed to a lapsed company, except those that have to stay open', () => {
