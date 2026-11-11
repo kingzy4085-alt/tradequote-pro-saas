@@ -1,0 +1,12 @@
+<!-- @dsCard group="Navigation" height=120 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ModuleTile — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack'}, h('div',{className:'tq-tile-grid'}, ['CRM','Estimates','Job Costing','LOTO Permits','Tool Crib','Site Vault'].map(function(n,i){return h(T.ModuleTile,{key:n,href:'#',className:i===3?'is-hover':''},n)}))));
+</script>
+</body>
+</html>

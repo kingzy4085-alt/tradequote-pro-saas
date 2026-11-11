@@ -1,0 +1,12 @@
+<!-- @dsCard group="Forms" height=120 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Select — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack',style:{maxWidth:260}}, h(T.Select,{label:'Status',options:['Active','Pending','Completed']})));
+</script>
+</body>
+</html>

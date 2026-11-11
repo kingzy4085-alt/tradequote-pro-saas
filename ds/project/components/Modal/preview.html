@@ -1,0 +1,15 @@
+<!-- @dsCard group="Overlays" height=380 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Modal — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(T.Modal,{inline:true,title:'Create New Estimate',actions:[h(T.Button,{key:'c',variant:'ghost'},'Cancel'),h(T.Button,{key:'s'},'Save Estimate')]},
+  h(T.TextField,{label:'Project Name',compact:true,placeholder:'e.g. Canola Plant Shutdown Maintenance'}),
+  h(T.TextField,{label:'Client Name',compact:true,placeholder:'e.g. Cargill Ltd.'}),
+  h(T.TextField,{label:'Markup Percentage (%)',compact:true,type:'number',defaultValue:'15'})));
+</script>
+</body>
+</html>

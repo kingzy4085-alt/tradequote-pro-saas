@@ -1,34 +1,34 @@
 export const Permissions = {
 
- owner:['*'],
+  owner: ['*'],
 
- admin:[
-  'projects',
-  'estimates',
-  'proposals',
-  'rfis',
-  'inventory'
- ],
+  admin: [
+    'projects',
+    'estimates',
+    'proposals',
+    'rfis',
+    'inventory'
+  ],
 
- project_*anager:[
-  'projects',
-  'estimates',
-  'proposals',
-  'rfis'
- ],
+  project_manager: [
+    'projects',
+    'estimates',
+    'proposals',
+    'rfis'
+  ],
 
- f*reman:[
-  'daily_logs',
-  'timecards',
-  'rfis'
- ],
+  foreman: [
+    'daily_logs',
+    'timecards',
+    'rfis'
+  ],
 
- electrician:[
-  'timecards'
- ],
+  electrician: [
+    'timecards'
+  ],
 
- client:[
-  'proposals'
- ]
+  client: [
+    'proposals'
+  ]
 
 }

@@ -1,0 +1,15 @@
+<!-- @dsCard group="Data display" height=168 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatCard — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame',style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',alignItems:'stretch'}},
+  h(T.StatCard,{label:'Active CRM Clients',value:42,caption:'Facility accounts & contacts'}),
+  h(T.StatCard,{label:'Active Estimates',value:17,caption:'Costing & pricing spreadsheets'}),
+  h(T.StatCard,{label:'Crew Schedules',loading:true,caption:'Shift & personnel tracking'})));
+</script>
+</body>
+</html>

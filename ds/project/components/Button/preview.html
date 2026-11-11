@@ -1,0 +1,14 @@
+<!-- @dsCard group="Actions" height=150 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack'},
+  h('div',{className:'tq-frame',style:{padding:0}}, h(T.Button,null,'+ New Estimate'), h(T.Button,{variant:'secondary'},'View Proposals'), h(T.Button,{variant:'ghost'},'Cancel'), h(T.Button,{variant:'danger',size:'sm'},'Delete')),
+  h('div',{className:'tq-frame',style:{padding:0}}, h(T.Button,{variant:'success',size:'lg'},'Save Client'), h(T.Button,{variant:'info',size:'lg'},'Issue Proposal'), h(T.Button,{variant:'critical',size:'lg'},'Log Punch Item'))));
+</script>
+</body>
+</html>

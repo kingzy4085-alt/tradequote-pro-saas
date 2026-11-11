@@ -1,0 +1,14 @@
+<!-- @dsCard group="Data display" height=300 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DataTable — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack'}, h(T.DataTable,{title:'Records (3)',
+  columns:[{key:'name',header:'ID / Name',tone:'primary'},{key:'status',header:'Status',render:function(r){return h(T.Badge,null,r.status)}},{key:'date',header:'Created Date',tone:'muted'},{key:'a',header:'Actions',align:'right',render:function(){return h(T.Button,{variant:'danger',size:'sm'},'Delete')}}],
+  rows:[{id:1,name:'MCC-4 Breaker Warranty',status:'Active',date:'10/28/2026'},{id:2,name:'VFD Replacement — Line 2',status:'Pending',date:'10/30/2026'},{id:3,name:'Substation Transformer',status:'Completed',date:'11/01/2026'}]})));
+</script>
+</body>
+</html>

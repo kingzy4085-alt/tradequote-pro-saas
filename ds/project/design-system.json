@@ -1,0 +1,19 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": { "v": 1, "at": "2026-11-01T19:55:00Z" },
+  "title": "TradeQuote PRO",
+  "namespace": "TQ",
+  "libraries": [{ "name": "react", "version": "18" }, { "name": "react-dom", "version": "18" }],
+  "sections": {},
+  "groups": [],
+  "assetGroups": {},
+  "blobs": {},
+  "docs": { "readme": "project/README.md", "sections": [] },
+  "lastChange": {
+    "by": "Claude",
+    "at": "2026-11-01T19:55:00Z",
+    "via": "Claude Code · tradequote-pro-saas@2dc68cd",
+    "note": "Extracted from the codebase: 44 colors, 10 text styles, spacing, radii, shadows, sizes, 11 hand-written components"
+  }
+}

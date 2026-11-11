@@ -1,0 +1,52 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Cover</title>
+<style>
+  html, body { margin: 0; height: 100%; background: var(--surface-page); }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; background: var(--surface-page); font-family: var(--font-sans); }
+  .cover svg { position: absolute; inset: 0; }
+  .a { fill: var(--accent); }
+  .ink { fill: var(--ink-on-accent); }
+  .r1 { fill: var(--surface-raised); }
+  .r2 { fill: var(--surface-raised-hover); }
+  .t { fill: var(--accent-text); }
+  .rx { rx: var(--radius-2xl); }
+  .pill { rx: 48px; }
+  .text { position: absolute; left: 40px; bottom: 40px; max-width: 440px; }
+  .name { margin: 0; font-size: 72px; line-height: .95; font-weight: 800; letter-spacing: -0.025em; color: var(--ink-strong); }
+  .tag { margin: 16px 0 0; font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+  <svg viewBox="0 0 960 288" width="960" height="288" aria-hidden="true">
+    <!--
+      blocks: accent 208×224 (radius-2xl), surface-raised 208×104, surface-raised-hover 96×104, accent-text pill 96×104 (rx = half of 96)
+      arrangement: one tall amber slab with three satellites on a space-4 (16px) gutter, inset space-8 from top and right
+      pattern: hazard stripes (loud, bold, safety row) — an electrical/LOTO operations tool marks danger zones in amber and black; 6 bands of ink-on-accent across the slab's base
+      scales: gutter space-4 16, inset space-8 32, stripe width 20 / pitch 40, radii radius-2xl 16 and a pill
+    -->
+    <defs>
+      <clipPath id="slab"><rect class="rx" x="496" y="32" width="208" height="224"/></clipPath>
+    </defs>
+    <rect class="a rx" x="496" y="32" width="208" height="224"/>
+    <g clip-path="url(#slab)">
+      <polygon class="ink" points="456,256 476,256 540,192 520,192"/>
+      <polygon class="ink" points="496,256 516,256 580,192 560,192"/>
+      <polygon class="ink" points="536,256 556,256 620,192 600,192"/>
+      <polygon class="ink" points="576,256 596,256 660,192 640,192"/>
+      <polygon class="ink" points="616,256 636,256 700,192 680,192"/>
+      <polygon class="ink" points="656,256 676,256 740,192 720,192"/>
+    </g>
+    <rect class="r1 rx" x="720" y="32" width="208" height="104"/>
+    <rect class="r2 rx" x="720" y="152" width="96" height="104"/>
+    <rect class="t pill" x="832" y="152" width="96" height="104"/>
+  </svg>
+  <div class="text">
+    <p class="name">TradeQuote<br>PRO</p>
+    <p class="tag">Industrial Shutdown &amp; Electrical Contracting Operations Hub</p>
+  </div>
+</div>
+</body>
+</html>

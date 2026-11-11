@@ -5,7 +5,7 @@ import { MODULE_PLAN, PLAN_RANK, moduleOf } from '@/lib/plans';
 const PUBLIC = ['/pricing', '/terms', '/privacy', '/login', '/signup', '/api/leads', '/api/stripe/webhook'];
 
 // Keeps the Supabase session fresh, sends signed-out visitors to /login and new accounts to /onboarding.
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {

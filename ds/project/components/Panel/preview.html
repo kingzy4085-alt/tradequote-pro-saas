@@ -1,0 +1,13 @@
+<!-- @dsCard group="Layout" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Panel — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack'}, h(T.Panel,{title:'Add New Record'},
+  h('div',{style:{display:'flex',gap:16}}, h(T.TextField,{placeholder:'Record Name / Title...',style:{flex:1},className:'',}), h(T.Select,{options:['Active','Pending','Completed']}), h(T.Button,{size:'lg'},'Add Record')))));
+</script>
+</body>
+</html>

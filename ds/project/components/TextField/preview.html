@@ -1,0 +1,14 @@
+<!-- @dsCard group="Forms" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TextField — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var T = window.TQ, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div',{className:'tq-frame tq-stack',style:{maxWidth:420}},
+  h(T.TextField,{label:'Project Name',placeholder:'e.g. Canola Plant Shutdown Maintenance'}),
+  h(T.TextField,{label:'PO Number',mono:true,compact:true,defaultValue:'PO-2026-0418'})));
+</script>
+</body>
+</html>
