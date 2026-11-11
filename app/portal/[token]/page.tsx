@@ -116,7 +116,7 @@ export default async function PortalPage({ params }: { params: { token: string }
             {view.state === 'accepted' && view.signer_name ? ` by ${view.signer_name}` : ''}.
           </p>
           <p className="mt-1">
-            {view.company.name} has been told.{contact ? ` Questions? Reach them at ${contact}.` : ''}
+            Your answer is recorded on {view.company.name}&apos;s copy of this proposal.{contact ? ` Questions? Reach them at ${contact}.` : ''}
           </p>
         </section>
       )}

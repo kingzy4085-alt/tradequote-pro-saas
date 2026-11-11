@@ -72,7 +72,7 @@ export default function DecisionForm({ token, company }: { token: string; compan
             <p className="text-sm font-semibold text-black mb-1">Sign here</p>
             <SignaturePad onChange={setSignature} />
           </div>
-          <p className="text-sm">By accepting you agree to the scope, price and terms above. {company} is told straight away.</p>
+          <p className="text-sm">By accepting you agree to the scope, price and terms above. Your answer is recorded on {company}&apos;s copy of this proposal.</p>
         </div>
       ) : (
         <div>
