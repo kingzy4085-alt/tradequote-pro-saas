@@ -1,2 +1,4 @@
-# Migrations are compared byte-for-byte with the generator in tests
-supabase/migrations/*.sql text eol=lf
+# SQL is compared byte-for-byte in tests (generator output, upgraded vs fresh
+# schemas), and Postgres keeps a stray \r inside function bodies, so every SQL
+# file must check out with LF on Windows too.
+*.sql text eol=lf
