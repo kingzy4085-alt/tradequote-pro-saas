@@ -133,7 +133,7 @@ export function PageHeader({ title, subtitle, back, actions }: { title: string; 
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
       <div>
         {back && (
-          <Link href={back.href} className="text-xs font-semibold text-amber-500 hover:underline uppercase tracking-wider">
+          <Link href={back.href} className={cx(TOUCH_TARGET, 'inline-flex items-center text-xs font-semibold text-amber-500 hover:underline uppercase tracking-wider')}>
             ← {back.label}
           </Link>
         )}

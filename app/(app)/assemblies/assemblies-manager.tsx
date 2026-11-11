@@ -154,14 +154,15 @@ export default function AssembliesManager({ initial, canWrite }: { initial: Asse
               <Input id="assembly-search" type="search" value={query} placeholder="Name, trade or a line" onChange={(e) => setQuery(e.target.value)} />
             </div>
             {shown.length === 0 && <p className="text-slate-400 text-sm">No assemblies match that search.</p>}
-            <ul className="grid lg:grid-cols-2 gap-4">
+            {/* One explicit column on phones: without it a long line stretches the card past the screen */}
+            <ul className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {shown.map((a) => {
                 const s = assemblySummary(a.lines);
                 return (
-                  <li key={a.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+                  <li key={a.id} className="min-w-0 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-white font-semibold">{a.name}</h2>
+                      <div className="min-w-0">
+                        <h2 className="text-white font-semibold break-words">{a.name}</h2>
                         <p className="text-sm text-slate-400">
                           {a.lines.length} {a.lines.length === 1 ? 'line' : 'lines'} · {formatMoney(s.material)} material · {s.hours.toFixed(2)} hrs
                         </p>
