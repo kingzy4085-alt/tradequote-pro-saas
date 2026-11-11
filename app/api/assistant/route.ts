@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonError, readJson, requireApi } from '@/lib/api';
-import { ChatRequest, SYSTEM_PROMPT, collectSources, contextPrompt, recordSearchTool, runRecordSearch, type Source } from '@/lib/assistant';
+import { ChatRequest, SYSTEM_PROMPT, capHistory, collectSources, contextPrompt, recordSearchTool, runRecordSearch, type Source } from '@/lib/assistant';
 import { env } from '@/lib/env';
 import { provinceTimeZone } from '@/lib/provinces';
 
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
     { type: 'text', text: contextPrompt({ companyName: ctx.company.name, province: ctx.company.province, role: ctx.role, today: new Date().toISOString().slice(0, 10) }) },
   ];
-  const messages: Anthropic.Beta.BetaMessageParam[] = input.data.messages.map((m) => ({ role: m.role, content: m.content }));
+  const messages: Anthropic.Beta.BetaMessageParam[] = capHistory(input.data.messages).map((m) => ({ role: m.role, content: m.content }));
 
   const encoder = new TextEncoder();
   const body = new ReadableStream<Uint8Array>({

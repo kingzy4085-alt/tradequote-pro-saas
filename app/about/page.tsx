@@ -1,13 +1,14 @@
 import Link from 'next/link';
 
 const AREAS = [
-  ['Bidding', 'CRM, estimates, proposals, RFQs and RFPs'],
-  ['Project controls', 'Change orders, RFIs, submittals, drawings, documents'],
-  ['Field', 'Daily logs with photos and sign-off, safety and tailgate logs, LOTO permits, punch list, timecards'],
+  ['Bidding', 'Clients, estimates, proposals from the same record, RFQs and bid opportunities'],
+  ['Project controls', 'A hub for each project, priced change orders with client sign-off, RFIs, submittals, drawings, documents'],
+  ['Field', 'Daily logs with photos and sign-off, timecards with foreman approval, LOTO permits, tailgate meetings and safety inspections with ordered sign-offs, punch list'],
   ['AI assistant', 'Canadian code and construction questions answered with sources, plus search across your own records'],
-  ['Money', 'Job costing, progress billing, invoices, payables, receivables'],
+  ['Money', 'Invoices and progress draws with holdback, receivables, payables, and budget against actual cost on every job'],
   ['Resources', 'Crew schedule, tool crib, fleet, equipment rentals, warehouse inventory, vendors'],
-  ['Close-out', 'Commissioning, cable testing, warranty, defect liability, sub compliance'],
+  ['Close-out', 'Commissioning, cable testing, warranty, deficiencies, sub compliance'],
+  ['Alerts', 'Overdue invoices, expiring insurance and open safety items flagged every day, in the app and by email'],
 ];
 
 export const metadata = { title: 'About · TradeQuote PRO' };
@@ -43,7 +44,7 @@ export default function AboutPage() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link href="/signup" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-3 rounded-xl">Start free trial</Link>
-          <Link href="/pricing" className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-5 py-3 rounded-xl border border-slate-700">Plans & Pricing</Link>
+          <Link href="/pricing" className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-5 py-3 rounded-xl border border-slate-700">Pricing</Link>
         </div>
       </div>
     </main>

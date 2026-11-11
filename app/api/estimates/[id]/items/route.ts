@@ -18,7 +18,7 @@ export async function GET(_request: Request, { params }: Params) {
   return NextResponse.json({ data });
 }
 
-// Replaces the lines and stores the total, computed here from the saved rates — never trusted from the client
+// Replaces the lines. The database works out the stored total from them and the saved rates
 export async function PUT(request: Request, { params }: Params) {
   if (!uuidSchema.safeParse(params.id).success) return jsonError(404, 'Not found');
   const ctx = await requireApi({ minRank: estimates.write, write: true });
@@ -37,13 +37,12 @@ export async function PUT(request: Request, { params }: Params) {
     return jsonError(400, `${line}${issue?.message ?? 'Invalid lines'}`);
   }
 
-  const { data: est, error } = await ctx.supabase.from('estimates').select('labour_rate, markup_percentage, tax_percentage').eq('id', params.id).maybeSingle();
+  const { error: saveError } = await ctx.supabase.rpc('save_estimate_items', { p_estimate: params.id, p_items: parsed.data.items });
+  if (saveError) return dbError(saveError, 'saving estimate lines');
+
+  const { data: est, error } = await ctx.supabase.from('estimates').select('labour_rate, markup_percentage, tax_percentage, total_amount').eq('id', params.id).maybeSingle();
   if (error) return dbError(error, 'loading the estimate');
   if (!est) return jsonError(404, 'Not found');
-
-  const items = parsed.data.items;
-  const totals = estimateTotals(items, est.labour_rate, est.markup_percentage, est.tax_percentage);
-  const { error: saveError } = await ctx.supabase.rpc('save_estimate_items', { p_estimate: params.id, p_items: items, p_total: totals.total });
-  if (saveError) return dbError(saveError, 'saving estimate lines');
+  const totals = { ...estimateTotals(parsed.data.items, est.labour_rate, est.markup_percentage, est.tax_percentage), total: Number(est.total_amount) };
   return NextResponse.json({ data: { totals } });
 }

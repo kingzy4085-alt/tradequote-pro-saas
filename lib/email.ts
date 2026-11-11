@@ -6,7 +6,8 @@ export interface OutgoingEmail {
   subject: string;
   text: string;
   html: string;
-  unsubscribeUrl: string;
+  /** Leave out only for mail to the business itself, such as a new lead. */
+  unsubscribeUrl?: string;
 }
 
 export interface EmailConfig {
@@ -19,6 +20,8 @@ export async function sendEmail(config: EmailConfig, email: OutgoingEmail): Prom
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
+      // A cached response would mean this email was never sent
+      cache: 'no-store',
       headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: config.from,
@@ -28,7 +31,7 @@ export async function sendEmail(config: EmailConfig, email: OutgoingEmail): Prom
         text: email.text,
         html: email.html,
         // One-click unsubscribe in Gmail and Outlook
-        headers: { 'List-Unsubscribe': `<${email.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+        headers: email.unsubscribeUrl ? { 'List-Unsubscribe': `<${email.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined,
       }),
       signal: AbortSignal.timeout(15_000),
     });

@@ -1,13 +1,13 @@
 import { notFound, redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { hasRank } from '@/lib/roles';
 import TeamManager from './team-manager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TeamPage() {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') redirect('/login');
   const { ctx } = result;
   if (!hasRank(ctx.role, 4)) notFound();

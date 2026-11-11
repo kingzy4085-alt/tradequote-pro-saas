@@ -1,11 +1,11 @@
 import { redirect } from 'next/navigation';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import OnboardingForm from './onboarding-form';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OnboardingPage() {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status === 'signed-out') redirect('/login');
   if (result.status === 'ok') redirect('/');
 

@@ -1,6 +1,8 @@
 import { notFound, redirect } from 'next/navigation';
 import { Alert, PageHeader, Panel } from '@/components/ui';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
+import { companyHasLiveSubscription, withBillingIds } from '@/lib/billing';
+import { PLAN_FEATURES, PLAN_NAME, planPriceLabel } from '@/lib/plan';
 import { hasRank } from '@/lib/roles';
 import BillingActions from './billing-actions';
 
@@ -15,11 +17,12 @@ const STATUS_TEXT: Record<string, string> = {
 };
 
 export default async function BillingPage({ searchParams }: { searchParams: { checkout?: string } }) {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') redirect('/login');
   const { ctx } = result;
   if (!hasRank(ctx.role, 4)) notFound();
-  const c = ctx.company;
+  const c = await withBillingIds(ctx);
+  if (!c) throw new Error('Could not load your billing details. Try again in a moment.');
 
   const trialEnd = new Date(c.trial_ends_at);
   const detail =
@@ -44,18 +47,20 @@ export default async function BillingPage({ searchParams }: { searchParams: { ch
           <Alert tone="info">Checkout was cancelled. Nothing was charged.</Alert>
         </div>
       )}
-      <Panel title="TradeQuote PRO">
+      <Panel title={PLAN_NAME}>
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</p>
         <p className="text-2xl font-bold text-white mt-1">{STATUS_TEXT[c.subscription_status] ?? c.subscription_status}</p>
         {detail && <p className="text-sm text-slate-400 mt-1">{detail}</p>}
-        <ul className="mt-6 space-y-2 text-sm text-slate-300">
-          <li>All 44 modules — field, estimating, project controls, finance and resources</li>
-          <li>Unlimited team members with role-based access</li>
-          <li>AI Assistant for Canadian code and construction questions (fair-use daily limit)</li>
-          <li>Desktop, Android and iPhone install</li>
+        <p className="text-lg font-semibold text-white mt-6">
+          {planPriceLabel()} <span className="text-sm font-normal text-slate-400">CAD / month, plus applicable tax</span>
+        </p>
+        <ul className="mt-4 space-y-2 text-sm text-slate-300">
+          {PLAN_FEATURES.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
         </ul>
         <div className="mt-6">
-          <BillingActions status={c.subscription_status} hasCustomer={!!c.stripe_customer_id} />
+          <BillingActions canSubscribe={!companyHasLiveSubscription(c)} hasCustomer={!!c.stripe_customer_id} />
         </div>
       </Panel>
     </>

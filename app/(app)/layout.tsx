@@ -1,13 +1,13 @@
 import { redirect } from 'next/navigation';
 import AppShell, { type NavGroup } from '@/components/app-shell';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { MODULE_GROUPS, MODULES } from '@/lib/modules';
 import { ROLE_LABEL, hasRank } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status === 'signed-out') redirect('/login');
   if (result.status === 'no-company') redirect('/onboarding');
   const { ctx } = result;

@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PageHeader, Panel } from '@/components/ui';
-import { getContext } from '@/lib/context';
+import { getPageContext } from '@/lib/context';
 import { provinceName } from '@/lib/provinces';
 import { ROLE_LABEL } from '@/lib/roles';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AccountPage() {
-  const result = await getContext();
+  const result = await getPageContext();
   if (result.status !== 'ok') redirect('/login');
   const { ctx } = result;
 

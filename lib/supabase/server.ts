@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { env } from '@/lib/env';
 
+// Next keeps fetch responses in its Data Cache unless told not to, and force-dynamic does not stop that
+// for a route that never reads cookies. Every database call has to reach the database.
+export const noStoreFetch: typeof fetch = (input, init) => fetch(input, { ...init, cache: 'no-store' });
+
 /**
  * Supabase client acting as the signed-in user (anon key + their session cookie).
  * Every query runs under row level security, so it can only reach that user's company.
@@ -10,21 +14,17 @@ import { env } from '@/lib/env';
 export function createSupabaseServerClient() {
   const cookieStore = cookies();
   return createServerClient(env.supabaseUrl(), env.supabaseAnonKey(), {
+    global: { fetch: noStoreFetch },
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
+      setAll(cookies: { name: string; value: string; options: CookieOptions }[]) {
         try {
-          cookieStore.set({ name, value, ...options });
+          for (const { name, value, options } of cookies) cookieStore.set(name, value, options);
         } catch {
           // Server components can't set cookies; middleware refreshes the session instead.
         }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {}
       },
     },
   });
@@ -32,10 +32,11 @@ export function createSupabaseServerClient() {
 
 /**
  * Service-role client that BYPASSES row level security. Only for the Stripe webhook,
- * billing customer records and sending invites — never with user-supplied filters.
+ * billing customer records, sending invites, leads and cron jobs — never with user-supplied filters.
  */
 export function createSupabaseAdminClient() {
   return createClient(env.supabaseUrl(), env.supabaseServiceRoleKey(), {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: noStoreFetch },
   });
 }

@@ -9,7 +9,7 @@ import { companyStatusFromSubscription } from '@/lib/billing';
 import { ChatRequest } from '@/lib/assistant';
 import { formatValue } from '@/lib/format';
 import { isPublicPath } from '@/middleware';
-import { generateMigration, MIGRATION_PATH } from '../scripts/generate-migration';
+import { generateMigration, generateSync, MIGRATION_PATH, SYNC_PATH } from '../scripts/generate-migration';
 
 const RESERVED = new Set(['id', 'company_id', 'created_by', 'title', 'status', 'notes', 'created_at', 'updated_at']);
 
@@ -40,8 +40,21 @@ describe('module registry', () => {
     }
   });
 
-  it('committed migration matches the registry', () => {
+  it('committed migrations match the registry', () => {
     expect(readFileSync(MIGRATION_PATH, 'utf8')).toBe(generateMigration());
+    expect(readFileSync(SYNC_PATH, 'utf8')).toBe(generateSync());
+  });
+
+  it('the sync only uses forms that can run twice', () => {
+    const sql = generateSync();
+    expect(sql).not.toMatch(/create table public\./);
+    expect(sql).not.toMatch(/create index (?!if not exists)/);
+    for (const m of MODULES) {
+      expect(sql).toContain(`create table if not exists public.${m.table} `);
+      for (const f of m.fields) expect(sql).toContain(`alter table public.${m.table} add column if not exists ${f.key} `);
+      expect(sql).toContain(`drop policy if exists ${m.table}_select on public.${m.table};`);
+      expect(sql).toContain(`drop trigger if exists ${m.table}_updated on public.${m.table};`);
+    }
   });
 });
 
@@ -79,10 +92,10 @@ describe('record validation', () => {
   });
 
   it('coerces numbers, money, dates and booleans', () => {
-    const r = parseRecord(getModule('estimates')!, { title: 'Bid', total_amount: '1234.567', bid_due: '2026-12-01', markup_percentage: '15' }, 'create');
-    expect(r.ok && r.data).toMatchObject({ total_amount: 1234.57, bid_due: '2026-12-01', markup_percentage: 15 });
+    const r = parseRecord(getModule('estimates')!, { title: 'Bid', labour_rate: '85.555', bid_due: '2026-12-01', markup_percentage: '15' }, 'create');
+    expect(r.ok && r.data).toMatchObject({ labour_rate: 85.56, bid_due: '2026-12-01', markup_percentage: 15 });
     expect(parseRecord(getModule('estimates')!, { title: 'Bid', bid_due: '12/01/2026' }, 'create').ok).toBe(false);
-    expect(parseRecord(getModule('estimates')!, { title: 'Bid', total_amount: 'lots' }, 'create').ok).toBe(false);
+    expect(parseRecord(getModule('estimates')!, { title: 'Bid', labour_rate: 'lots' }, 'create').ok).toBe(false);
     const b = parseRecord(subs, { title: 'Apex', safety_cert_verified: 'true' }, 'create');
     expect(b.ok && b.data.safety_cert_verified).toBe(true);
   });

@@ -13,6 +13,9 @@ const BUTTON_VARIANTS = {
   danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold',
 } as const;
 
+// Phones and tablets get the 48px the pricing page promises, for gloves. A desk keeps the tighter size.
+const TOUCH_TARGET = 'min-h-[48px] lg:min-h-0';
+
 const BUTTON_SIZES = {
   sm: 'px-3 py-1.5 text-xs rounded-lg',
   md: 'px-4 py-2.5 rounded-lg',
@@ -30,6 +33,7 @@ export function Button({
       type="button"
       {...props}
       className={cx(
+        TOUCH_TARGET,
         'inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500',
         BUTTON_VARIANTS[variant],
         BUTTON_SIZES[size],
@@ -41,7 +45,7 @@ export function Button({
 
 export function ButtonLink({ href, variant = 'primary', size = 'md', children, className }: { href: string; variant?: keyof typeof BUTTON_VARIANTS; size?: keyof typeof BUTTON_SIZES; children: ReactNode; className?: string }) {
   return (
-    <Link href={href} className={cx('inline-flex items-center justify-center gap-2 transition-colors', BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className)}>
+    <Link href={href} className={cx(TOUCH_TARGET, 'inline-flex items-center justify-center gap-2 transition-colors', BUTTON_VARIANTS[variant], BUTTON_SIZES[size], className)}>
       {children}
     </Link>
   );
@@ -67,15 +71,18 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   return <input ref={ref} {...props} className={cx(inputClass, props.className)} />;
 });
 
-export function Select({ options, placeholder, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: string[]; placeholder?: string }) {
+export function Select({ options, placeholder, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: (string | { value: string; label: string })[]; placeholder?: string }) {
   return (
     <select {...props} className={cx(inputClass, props.className)}>
       {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
+      {options.map((o) => {
+        const { value, label } = typeof o === 'string' ? { value: o, label: o } : o;
+        return (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        );
+      })}
     </select>
   );
 }
@@ -98,11 +105,16 @@ export function Panel({ title, description, children, className, roomy }: { titl
   );
 }
 
-export function StatCard({ label, value, caption, href }: { label: string; value: ReactNode; caption?: string; href?: string }) {
+export function StatCard({ label, value, caption, href, meter }: { label: string; value: ReactNode; caption?: string; href?: string; /** 0 to 100: a thin bar under the figure. The caption has to say the same thing in words. */ meter?: number }) {
   const body = (
     <>
       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">{label}</p>
-      <p className="text-4xl font-extrabold text-white">{value}</p>
+      <p className="text-3xl sm:text-4xl font-extrabold text-white break-words">{value}</p>
+      {meter !== undefined && (
+        <div aria-hidden="true" className="mt-3 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+          <div className="h-full bg-amber-500" style={{ width: `${meter}%` }} />
+        </div>
+      )}
       {caption && <p className="text-xs text-amber-400 mt-2">{caption}</p>}
     </>
   );

@@ -24,4 +24,6 @@ export const env = {
   businessAddress: () => required('BUSINESS_MAILING_ADDRESS'),
   /** Signs unsubscribe links; falls back to CRON_SECRET so one secret is enough to start. */
   unsubscribeSecret: () => process.env.UNSUBSCRIBE_SECRET || required('CRON_SECRET'),
+  /** Who hears when the daily automation fails or goes quiet. Optional: without one it is only logged. */
+  operatorEmail: () => process.env.OPERATOR_EMAIL || process.env.EMAIL_REPLY_TO || undefined,
 };

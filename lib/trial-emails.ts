@@ -20,7 +20,7 @@ export const TRIAL_STEPS: TrialStep[] = [
     body: [
       'Hi {name},',
       '{company} has 14 days of full access, with no card on file. Three things take about ten minutes and show you most of what the app does:',
-      '1. Add one client in CRM.\n2. Build an estimate for a job you bid recently, and compare the total with the one you sent.\n3. Invite your foreman from Settings → Team so they can try the daily log on their phone.',
+      '1. Add one client in Clients.\n2. Build an estimate for a job you bid recently, and compare the total with the one you sent.\n3. Invite your foreman from Settings → Team so they can try the daily log on their phone.',
       'Install it on your phone too: open the app in Chrome (Android) or Safari (iPhone) and choose Install app or Add to Home Screen.',
     ],
     cta: { label: 'Open TradeQuote PRO', path: '/' },
@@ -50,10 +50,10 @@ export const TRIAL_STEPS: TrialStep[] = [
   {
     id: 'compliance',
     day: 10,
-    subject: "What's expiring in the next 30 days?",
+    subject: "What's about to expire?",
     body: [
       'Hi {name},',
-      'The Command Center lists every subcontractor insurance and WCB clearance, employee ticket and warranty that expires in the next 30 days, so nothing lapses before an audit or a claim.',
+      'The Attention panel on the Command Center flags subcontractor insurance and WCB clearances, employee tickets and warranties as they come up for renewal, and keeps insurance and tickets flagged once they lapse, so you hear about it before an audit or a claim. It checks every day.',
       'Stuck on a code question? Ask the AI Assistant. It answers Canadian Electrical Code and construction questions and names the edition and section so you can check it.',
     ],
     cta: { label: 'Open the Command Center', path: '/' },
@@ -67,7 +67,7 @@ export const TRIAL_STEPS: TrialStep[] = [
       "{company}'s free trial ends tomorrow. Nothing is deleted: after that you can still sign in and read everything, but editing stops until you subscribe.",
       'Subscribing takes a minute on the Billing page, and you can cancel any time from the same page.',
     ],
-    cta: { label: 'Choose a plan', path: '/settings/billing' },
+    cta: { label: 'Subscribe', path: '/settings/billing' },
   },
 ];
 

@@ -18,7 +18,10 @@ export const CompanyProfileSchema = z
     default_tax: percent(100),
     default_labour_rate: percent(100000),
     default_terms: text(10000),
+    overtime_multiplier: z.coerce.number().finite().min(1, 'Must be 1 or more').max(10).optional(),
+    default_holdback_pct: percent(100),
   })
   .strip();
 
-export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, default_markup, default_tax, default_labour_rate, default_terms';
+// default_markup and default_labour_rate aren't here: no signed-in user can read them directly. withCompanyRates adds them, for project managers and up.
+export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, default_tax, default_terms, overtime_multiplier, default_holdback_pct';

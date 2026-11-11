@@ -37,7 +37,18 @@ export default function OnboardingForm({ email, invitations }: { email: string; 
   }
 
   return (
-    <AuthCard title="Set up your company" subtitle={`Signed in as ${email}`}>
+    <AuthCard
+      title="Set up your company"
+      subtitle={`Signed in as ${email}`}
+      footer={
+        <form action="/auth/signout" method="post">
+          Wrong email? An invitation only shows on the address it was sent to.{' '}
+          <button type="submit" className="inline-flex items-center min-h-[48px] text-amber-400 hover:underline">
+            Sign out
+          </button>
+        </form>
+      }
+    >
       <div className="space-y-6">
         {error && <Alert>{error}</Alert>}
         <div>
@@ -77,7 +88,7 @@ export default function OnboardingForm({ email, invitations }: { email: string; 
           <div>
             <Label htmlFor="province">Province / Territory</Label>
             <Select id="province" value={province} onChange={(e) => setProvince(e.target.value)} options={PROVINCES.map((p) => p.code)} />
-            <p className="text-xs text-slate-500 mt-1">Used for code references, GST/PST and holdback rules.</p>
+            <p className="text-xs text-slate-500 mt-1">Sets your local time for dates and reminders. You set your sales tax, labour rate and holdback in Company Profile after this.</p>
           </div>
           <Button type="submit" size="lg" className="w-full" disabled={loading}>
             {loading ? 'Setting up...' : 'Create Company & Start Trial'}

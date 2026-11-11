@@ -62,7 +62,7 @@ export default function SignaturePad({ onChange }: { onChange: (dataUrl: string)
         className="w-full h-40 bg-white rounded-lg touch-none cursor-crosshair"
         aria-label="Signature box: sign with your finger or mouse"
       />
-      <button type="button" onClick={clear} className="text-sm text-slate-400 hover:text-white mt-2">
+      <button type="button" onClick={clear} className="inline-flex items-center min-h-[48px] lg:min-h-0 text-sm text-slate-400 hover:text-white mt-2">
         Clear signature
       </button>
     </div>
