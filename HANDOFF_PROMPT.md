@@ -30,10 +30,10 @@ You are continuing work on **TradeQuote PRO**, a Next.js 14 (App Router) + Supab
 
 Do them one at a time. After each: tests, build, commit.
 
-1. **GST/HST number and logo on printed documents.** Add `tax_number` (and later a logo) to the company profile: new migration adding the column to `companies`, the field in `app/(app)/settings/company/company-form.tsx` and `app/api/company/route.ts`, and a line in `Letterhead` in `lib/print.tsx`. Show it on `app/print/invoice`, `app/print/proposal` and `app/portal/[token]/page.tsx`.
+1. **[done] GST/HST number on printed documents.** `tax_number` is on the company profile (migration `20261112000030_company_tax_number.sql`) and prints on every letterhead. A company logo is still to do, and is not urgent.
 2. **Tell the contractor when a client answers a proposal.** After `answerPortal` succeeds in `lib/portal-server.ts`, raise an alert for the company through the existing alerts system (`lib/alerts.ts`, `lib/automation.ts`, migration `20261104000210_automation.sql`), and email the owner with `sendEmail` from `lib/email.ts` when email is configured.
 3. **Line items on the client portal.** Return sell prices only (markup folded in, never cost or markup) from `portal_view` in a new migration. Match `lineSellPrice` in `lib/estimate-math.ts` and the layout of `app/print/proposal/[id]/page.tsx`. Add a test proving cost and markup never appear in the payload.
-4. **Past-due banner.** In `components/app-shell.tsx`, show a notice with a billing link when `subscription_status` is `past_due`.
+4. **[done] Past-due banner.** `components/app-shell.tsx` shows a notice with a billing link while `subscription_status` is `past_due`.
 5. **File attachments** on Drawings, Documents and Site Vault. Reuse the private storage bucket and signed-URL pattern from daily log photos (`lib/daily-log.ts`, migration `20261101000100_job_photos_storage.sql`). Drag and drop, 25 MB limit, type allowlist.
 6. **Partial payments and an accounting export.** A payments table per invoice, "Record payment" on `app/(app)/invoices/[id]`, and a CSV export of invoices and payments.
 7. **Account deletion and data export** for an owner, under `app/(app)/settings/account`.

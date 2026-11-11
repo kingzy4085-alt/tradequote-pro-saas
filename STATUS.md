@@ -33,6 +33,14 @@ npm run build
 npm run e2e:local    # needs a local Supabase stack and the app on port 3200 (README, "Local end-to-end run")
 ```
 
+**Scripts (PowerShell 7, run from the project folder):**
+
+| Script | What it does |
+| --- | --- |
+| `pwsh scripts/verify.ps1` | Typecheck, all tests, production build. Add `-E2E` for the end-to-end run. Changes nothing. |
+| `pwsh scripts/continue-build.ps1` | Hands the next unfinished task in `HANDOFF_PROMPT.md` to the Claude command-line tool, then verifies it. `-Tasks 3` does three. Uses your Claude usage. Never pushes. |
+| `pwsh scripts/ship-to-master.ps1` | Verifies, then publishes this branch to GitHub `master` as a plain fast-forward. Asks before pushing. |
+
 The local Supabase stack on this computer is the Docker project `localdb`. Its config folder was in a temp directory that got deleted, so its API gateway container (`supabase_kong_localdb`) only starts while five small email template files exist at the old temp path. They were recreated on 2026-11-11. If the gateway refuses to start again, create a fresh stack as the README describes; the data lives in the Docker volume and survives.
 
 ## What is built
@@ -86,10 +94,10 @@ Most valuable first.
 5. **Plan tiers.** Checkout sells one plan. `feat/finish-port` has an unverified tiers screen.
 6. **From the feature wishlist, not started:** quote builder as a step-by-step wizard, AI estimate from a scope document, offline mode, the photo-and-measure site visit flow, a light theme (the app is dark only), swipe actions, deposit payment and file upload in the client portal, accounting export.
 7. **Account deletion and data export** for customers. Neither exists, and the draft Terms promise both.
-8. **Printed invoices and proposals have no GST/HST registration number and no logo.** Canadian customers need the number on an invoice to claim the tax back. Needs a field on the company profile and a line on the print pages.
+8. **No company logo on printed documents.** The GST/HST registration number is done: it is on the company profile and prints on every letterhead.
 9. **Accounting export and partial payments.** "Mark paid" is all or nothing, and a bookkeeper has to re-key invoices.
 10. **Error tracking and a support contact.** Nothing reports a customer's failure to you today.
-11. **Past-due banner.** A company whose card is failing keeps full access with no notice in the app; set Stripe's retry settings to cancel after the last retry.
+11. **Stripe retry settings.** The app now shows a banner while a card is failing, but access only stops when Stripe cancels: set Stripe's retry settings to cancel after the last retry.
 12. Subscribing mid-trial charges at once and forfeits the rest of the trial. Decide whether billing should start when the trial ends.
 13. `ROADMAP.md` is stale. This file replaces it.
 
@@ -101,7 +109,8 @@ Most valuable first.
 
 The full list is in `README.md` under "Before you sell it". In short:
 
-- **Revoke the API key committed in `.continue/agents/new-config.yaml`**, remove the file from the repo, and decide whether the GitHub repo should be public at all (README, "Do first").
+- **URGENT: revoke the API key in `.continue/agents/new-config.yaml`.** Confirmed on 2026-11-11: the GitHub repo is **public**, and that file holds what looks like a provider API key (the value was not read). It has been on GitHub since commit `ae88835`, so treat the key as exposed and revoke it at the provider. The file is no longer tracked from this branch on and the folder is ignored, but that does not remove it from the history already on GitHub.
+- Decide whether the GitHub repo should be public at all. Today anyone can read the source.
 - Fix the GitHub billing lock so the CI checks run.
 - **Decide the price.** `$299 CAD` in `lib/plan.ts` is a placeholder and must match the Stripe Price. The pricing page advertises a 40% founding offer whose Stripe coupon does not exist yet: create it or take the offer down.
 - Back up the untracked `sales/` and `ds/` folders in `C:\Users\kylei\tradequote-pro-saas`. They hold prospect lists, so keep them out of a public repo.
