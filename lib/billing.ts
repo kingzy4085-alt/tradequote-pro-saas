@@ -42,6 +42,16 @@ export function companyStatusFromSubscription(status: Stripe.Subscription.Status
   }
 }
 
+/**
+ * A company on its free trial keeps it until a subscription is actually running. A first payment
+ * that failed, stalled, expired or was cancelled unpaid must not end the trial early.
+ */
+export function keepsFreeTrial(company: { subscription_status?: string | null; trial_ends_at?: string | null }, sub: Pick<Stripe.Subscription, 'status'>, now = new Date()): boolean {
+  if (company.subscription_status !== 'trialing' || !company.trial_ends_at || !(new Date(company.trial_ends_at) > now)) return false;
+  const next = companyStatusFromSubscription(sub.status);
+  return next !== 'active' && next !== 'past_due';
+}
+
 /** Company columns to write for a subscription. past_due stays editable while Stripe retries the card. */
 export function subscriptionUpdate(sub: Stripe.Subscription) {
   return {
