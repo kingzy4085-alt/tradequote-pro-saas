@@ -55,7 +55,7 @@ function redirectIfSignedOut(res: Response): boolean {
 // The status picker's value when a link from the Command Center asked for several at once
 const SEVERAL_STATUSES = '__several';
 
-export default function ModulePage({ slug, canWrite, canDelete, initialProject, initialStatuses, initialView, startNew }: { slug: string; canWrite: boolean; canDelete: boolean; initialProject?: string; initialStatuses?: string[]; initialView?: string; startNew?: boolean }) {
+export default function ModulePage({ slug, canWrite, canDelete, initialProject, initialStatuses, initialView, initialQuery, startNew }: { slug: string; canWrite: boolean; canDelete: boolean; initialProject?: string; initialStatuses?: string[]; initialView?: string; /** Text already in the search box, when a search result opened this list. */ initialQuery?: string; startNew?: boolean }) {
   const mod = getModule(slug)!;
   const listColumns = useMemo(() => pickListColumns(mod), [mod]);
   const recordLabel = mod.recordLabel ?? mod.titleLabel;
@@ -67,7 +67,7 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery ?? '');
   const [statusFilter, setStatusFilter] = useState<string[]>(() => (initialStatuses ?? []).filter((s) => mod.statuses.includes(s)));
   const [viewFilter, setViewFilter] = useState(() => (listViewLabel(slug, initialView) ? initialView! : ''));
   const [projectFilter, setProjectFilter] = useState(() => (projectField && initialProject && UUID.test(initialProject) ? initialProject : ''));
