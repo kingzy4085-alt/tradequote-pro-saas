@@ -535,15 +535,127 @@ async function main() {
   section('Invite flow');
   await inviteFlow({ owner, pm, companyId });
 
+  // The rival was lapsed above. Put it back so the checks below are about the company line, not the lapse.
+  ok('restoring the rival', await admin.from('companies').update({ trial_ends_at: new Date(Date.now() + 7 * 864e5).toISOString() }).eq('id', rivalCompany));
+
+  section('Search');
+  const search = async (who, q) => must(`searching for ${q}`, await GET(who, `/api/search?q=${encodeURIComponent(q)}`), 200).groups;
+  const hasHit = (groups, slug, id) => groups.some((g) => g.slug === slug && g.hits.some((h) => h.id === id));
+  check('signed out cannot search', (await GET(null, '/api/search?q=client')).status === 401);
+  const byName = await search(pm, `client ${RUN}`);
+  check('search finds the client by name, whatever the capitals', hasHit(byName, 'crm', client.id), byName);
+  check('the same search finds the estimate through its client name', hasHit(byName, 'estimates', estimate.id), byName.map((g) => g.slug));
+  check('search finds a client by their email', hasHit(await search(pm, 'sam@client.test'), 'crm', client.id));
+  const jobHits = await search(pm, `Job ${RUN}`);
+  check('search finds the estimate by title and links to its page', jobHits.some((g) => g.slug === 'estimates' && g.hits.some((h) => h.href === `/estimates/${estimate.id}`)), jobHits);
+  const crewHits = await search(electrician, `${RUN}`);
+  check('an electrician never gets clients, quotes or invoices back', crewHits.every((g) => !['crm', 'estimates', 'proposals', 'invoices'].includes(g.slug)), crewHits.map((g) => g.slug));
+  check('another company finds none of it', (await search(rival, `${RUN}`)).every((g) => g.hits.every((h) => !h.title.includes(`Job ${RUN}`) && h.id !== client.id)));
+  check('a percent sign is searched for, not treated as "everything"', (await search(pm, '%%')).length === 0);
+  check('one letter is too short to search', (await search(pm, 'a')).length === 0);
+
+  section('Assemblies');
+  const boxLine = { description: 'Device box', quantity: 2, unit: 'ea', material_unit_cost: 4, labour_hours_per_unit: 0.25 };
+  const wireLine = { description: '#12 wire', quantity: 30, unit: 'm', material_unit_cost: 1.25, labour_hours_per_unit: 0.02 };
+  check('a foreman cannot open the assembly library', (await GET(foreman, '/api/assemblies')).status === 403);
+  must('loading the starter assemblies', await POST(pm, '/api/assemblies/starters'), 201);
+  check('the starters only load into an empty library', (await POST(pm, '/api/assemblies/starters')).status === 409);
+  const library = must('listing assemblies', await GET(pm, '/api/assemblies'), 200).data;
+  check('the library comes back with every assembly and its lines', library.length >= 8 && library.every((a) => a.lines.length > 0 && a.lines.every((l) => 'material_unit_cost' in l && !('sort' in l))), library.length);
+  const kit = must('saving an assembly', await POST(pm, '/api/assemblies', { name: `Kit ${RUN}`, category: 'Test', lines: [boxLine] }), 201).data;
+  check('a second assembly with the same name is refused, whatever the capitals', (await POST(pm, '/api/assemblies', { name: `KIT ${RUN}`, lines: [boxLine] })).status === 409);
+  check('an assembly with no lines is refused', (await POST(pm, '/api/assemblies', { name: `Empty ${RUN}`, lines: [] })).status === 400);
+  must('editing the assembly', await PUT(pm, `/api/assemblies/${kit.id}`, { name: `Kit ${RUN} v2`, category: 'Test', lines: [wireLine, boxLine] }), 200);
+  const edited = must('listing assemblies again', await GET(pm, '/api/assemblies'), 200).data.find((a) => a.id === kit.id);
+  check('the edit replaced the name and the lines, in order', edited?.name === `Kit ${RUN} v2` && edited.lines.map((l) => l.description).join('|') === '#12 wire|Device box', edited);
+  check('another company sees an empty library', must('rival library', await GET(rival, '/api/assemblies'), 200).data.length === 0);
+  check('another company cannot change or delete it', (await PUT(rival, `/api/assemblies/${kit.id}`, { name: 'Stolen', lines: [boxLine] })).status === 404 && (await DELETE(rival, `/api/assemblies/${kit.id}`)).status === 404);
+  must('deleting the assembly', await DELETE(pm, `/api/assemblies/${kit.id}`), 200);
+  check('it is gone', !must('listing after delete', await GET(pm, '/api/assemblies'), 200).data.some((a) => a.id === kit.id));
+
+  section('Client portal');
+  // A new proposal: the one above is accepted and already has its project
+  const offer = must('writing a proposal to share', await POST(pm, '/api/modules/proposals', {
+    title: `Offer ${RUN}`, status: 'Draft', client_id: client.id, client_name: client.title, total_amount: 4200, scope_of_work: 'Add two receptacles.', notes: 'INTERNAL margin note',
+  }), 201).data;
+  const share = (who) => POST(who, `/api/proposals/${offer.id}/share`);
+  const answer = (token, body) => POST(null, `/api/portal/${token}`, body);
+  const tokenOf = (url) => new URL(url).pathname.split('/')[2];
+  check('a draft cannot be shared', (await share(pm)).status === 409);
+  must('marking the offer sent', await PUT(pm, `/api/modules/proposals/${offer.id}`, { status: 'Sent' }), 200);
+  check('a foreman cannot share it', (await share(foreman)).status === 403);
+  check('another company cannot share it', (await share(rival)).status === 404);
+  check('no link yet', must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'none');
+  const firstLink = must('sharing with the client', await share(pm), 201).data.url;
+  check('the link is a long random token on the portal', /^\/portal\/[A-Za-z0-9_-]{43}$/.test(new URL(firstLink).pathname), firstLink.slice(0, 40));
+  const firstToken = tokenOf(firstLink);
+  const stored = ok('reading the stored link', await admin.from('proposal_shares').select('token_hash').eq('proposal_id', offer.id));
+  check('only a hash of the token is stored', stored.length === 1 && /^[0-9a-f]{64}$/.test(stored[0].token_hash) && !stored[0].token_hash.includes(firstToken));
+  check('the link is live and unopened', must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'live');
+
+  const portalPage = await fetch(`${S.app}/portal/${firstToken}`, { redirect: 'manual' });
+  const portalHtml = await portalPage.text();
+  check('the client opens it with no login', portalPage.status === 200 && portalHtml.includes(`Offer ${RUN}`) && portalHtml.includes('Add two receptacles.'), portalPage.status);
+  check('the client sees the price and none of the internal notes', portalHtml.includes('4,200') && !portalHtml.includes('INTERNAL'));
+  check('the page is kept out of search engines', /noindex/.test(portalHtml));
+  check('the contractor sees the client opened it', must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'viewed');
+
+  const madeUp = 'A'.repeat(43);
+  check('a made-up link shows nothing', !(await (await fetch(`${S.app}/portal/${madeUp}`)).text()).includes(`Offer ${RUN}`));
+  check('a made-up link cannot answer', (await answer(madeUp, { decision: 'declined' })).status === 404);
+  check('a link that is not a token is refused', (await answer('short', { decision: 'declined' })).status === 404);
+  check('accepting needs a signature', (await answer(firstToken, { decision: 'accepted', name: 'Sam Client' })).status === 400);
+  check('accepting needs a name', (await answer(firstToken, { decision: 'accepted', name: ' ', signature: SIGNATURE })).status === 400);
+  const tokenHash = stored[0].token_hash;
+  const directAnon = await anonClient().rpc('portal_view', { p_token_hash: tokenHash });
+  const directUser = await pm.db.rpc('portal_decide', { p_token_hash: tokenHash, p_decision: 'accepted', p_name: 'Pat', p_signature: SIGNATURE, p_reason: null, p_ip: null, p_agent: null });
+  check('the database refuses the portal functions to the public key and to signed-in users', !!directAnon.error && !!directUser.error, [directAnon.data, directUser.data]);
+  const directTable = await anonClient().from('proposal_shares').select('token_hash');
+  check('the public key cannot read the links', !!directTable.error || (directTable.data ?? []).length === 0, directTable.data);
+
+  const secondToken = tokenOf(must('making a new link', await share(pm), 201).data.url);
+  check('making a new link turns the old one off', (await answer(firstToken, { decision: 'accepted', name: 'Sam Client', signature: SIGNATURE })).status === 409);
+  check('the old link no longer shows the proposal', !(await (await fetch(`${S.app}/portal/${firstToken}`)).text()).includes('Add two receptacles.'));
+  must('the client accepts and signs', await answer(secondToken, { decision: 'accepted', name: 'Sam Client', signature: SIGNATURE }), 200);
+  check('the proposal is now accepted', must('reading the offer', await GET(pm, `/api/modules/proposals/${offer.id}`), 200).data.status === 'Accepted');
+  const signedLink = must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data;
+  check('the contractor sees who signed and when', signedLink.status === 'accepted' && signedLink.share.signer_name === 'Sam Client' && !!signedLink.share.decided_at, signedLink);
+  check('a second answer is refused', (await answer(secondToken, { decision: 'declined' })).status === 409);
+  check('the answer cannot be undone by turning the link off', must('turning off', await DELETE(pm, `/api/proposals/${offer.id}/share`), 200).ok === true && must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'accepted');
+  const afterHtml = await (await fetch(`${S.app}/portal/${secondToken}`)).text();
+  check('the link now shows it was accepted, and by whom', afterHtml.includes('Accepted') && afterHtml.includes('Sam Client') && !afterHtml.includes('Accept and sign'));
+  check('the signed proposal becomes a project like any accepted one', (await POST(pm, `/api/proposals/${offer.id}/convert`)).status === 201);
+
+  const declinedOffer = must('a second proposal', await POST(pm, '/api/modules/proposals', { title: `Decline ${RUN}`, status: 'Sent', client_id: client.id, client_name: client.title, total_amount: 900 }), 201).data;
+  const declineToken = tokenOf(must('sharing it', await POST(pm, `/api/proposals/${declinedOffer.id}/share`), 201).data.url);
+  must('the client declines', await answer(declineToken, { decision: 'declined', reason: 'Went with another bid' }), 200);
+  const declined = must('link status', await GET(pm, `/api/proposals/${declinedOffer.id}/share`), 200).data;
+  check('declining sets the proposal to Declined and keeps the reason', declined.status === 'declined' && declined.share.decline_reason === 'Went with another bid' && must('reading it', await GET(pm, `/api/modules/proposals/${declinedOffer.id}`), 200).data.status === 'Declined', declined);
+
   section('Pages load');
   for (const who of [owner, pm, foreman, electrician]) {
     const bad = [];
-    for (const path of ['/', `/projects/${projectId}`, '/timecards', '/job-costing', '/invoices', `/invoices/${invoiceId}`, `/print/invoice/${invoiceId}`, `/loto-permits/${loto.id}`, `/print/record/loto-permits/${loto.id}`, `/change-orders/${co.id}`, '/alerts']) {
+    for (const path of ['/', `/projects/${projectId}`, '/timecards', '/job-costing', '/invoices', `/invoices/${invoiceId}`, `/print/invoice/${invoiceId}`, `/loto-permits/${loto.id}`, `/print/record/loto-permits/${loto.id}`, `/change-orders/${co.id}`, '/alerts',
+      '/pipeline', '/calendar', '/calendar?view=week', '/assemblies', `/crm/${client.id}`, `/estimates/${estimate.id}`, `/proposals/${offer.id}`, '/crm?q=Client']) {
       const { status } = await GET(who, path);
       if (status >= 500) bad.push(`${status} ${path}`);
     }
     check(`no page falls over for ${who.tag}`, bad.length === 0, bad);
   }
+  const pageText = async (who, path) => (await fetch(`${S.app}${path}`, { headers: { cookie: who.cookie }, redirect: 'manual' })).text();
+  const home = await pageText(owner, '/');
+  check('the Command Center shows win rate and follow-ups', home.includes('Win Rate') && home.includes('Follow-ups Due'));
+  const board = await pageText(pm, '/pipeline');
+  check('the pipeline board lists the quotes with a win rate', board.includes(`Offer ${RUN}`) && board.includes(`Decline ${RUN}`) && board.includes('Win rate'));
+  const profile = await pageText(owner, `/crm/${client.id}`);
+  check('the client profile shows the client, their quotes and their money', profile.includes(`Client ${RUN}`) && profile.includes(`Job ${RUN}`) && profile.includes(`Offer ${RUN}`) && profile.includes('Lifetime value'));
+  check('a project manager sees the client without the finance figures', !(await pageText(pm, `/crm/${client.id}`)).includes('Lifetime value'));
+  check('the calendar and the assembly library open', (await pageText(pm, '/calendar')).includes('Calendar') && (await pageText(pm, '/assemblies')).includes('Assemblies'));
+  // What matters is that none of it reaches them, whatever status a streamed "not found" page carries
+  for (const [who, path, secret] of [[foreman, '/pipeline', `Offer ${RUN}`], [foreman, '/assemblies', '100A Service'], [electrician, `/crm/${client.id}`, `Client ${RUN}`]]) {
+    check(`${who.tag} is not shown ${path.split('/')[1]}`, !(await pageText(who, path)).includes(secret));
+  }
+  check('and the project manager is shown the starters', (await pageText(pm, '/assemblies')).includes('100A Service'));
   const sanity = await rollup();
   console.log(`\nFinal job figures: revised ${sanity.revised_contract}, budget ${sanity.budget}, actual ${sanity.actual_cost}, billed ${sanity.billed_amount}, paid ${sanity.paid_amount}, ${sanity.status}`);
 }
