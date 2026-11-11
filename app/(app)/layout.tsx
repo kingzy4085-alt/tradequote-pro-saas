@@ -32,6 +32,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       items: [
         { href: '/', label: 'Command Center' },
         ...(seesPipeline ? [{ href: '/pipeline', label: 'Quote Pipeline' }] : []),
+        { href: '/calendar', label: 'Calendar' },
+        ...(canOpen(ctx.role, 'estimates') ? [{ href: '/assemblies', label: 'Assemblies' }] : []),
         { href: '/assistant', label: 'AI Assistant' },
         { href: '/help', label: 'How to Use' },
       ],
