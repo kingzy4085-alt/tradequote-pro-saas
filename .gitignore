@@ -46,3 +46,6 @@ next-env.d.ts
 # local tooling
 supabase/.temp/
 .claude/launch.json
+
+# Local AI tool settings. They can hold provider keys, so they never belong in the repo.
+.continue/
