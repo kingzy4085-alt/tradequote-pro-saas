@@ -85,14 +85,27 @@ Most valuable first.
 4. **File and drawing attachments** (drag and drop, previews). Photos work on daily logs and safety records only.
 5. **Plan tiers.** Checkout sells one plan. `feat/finish-port` has an unverified tiers screen.
 6. **From the feature wishlist, not started:** quote builder as a step-by-step wizard, AI estimate from a scope document, offline mode, the photo-and-measure site visit flow, a light theme (the app is dark only), swipe actions, deposit payment and file upload in the client portal, accounting export.
-7. **Account deletion and data export** for customers. Neither exists.
-8. `ROADMAP.md` is stale (every box unticked). This file replaces it.
+7. **Account deletion and data export** for customers. Neither exists, and the draft Terms promise both.
+8. **Printed invoices and proposals have no GST/HST registration number and no logo.** Canadian customers need the number on an invoice to claim the tax back. Needs a field on the company profile and a line on the print pages.
+9. **Accounting export and partial payments.** "Mark paid" is all or nothing, and a bookkeeper has to re-key invoices.
+10. **Error tracking and a support contact.** Nothing reports a customer's failure to you today.
+11. **Past-due banner.** A company whose card is failing keeps full access with no notice in the app; set Stripe's retry settings to cancel after the last retry.
+12. Subscribing mid-trial charges at once and forfeits the rest of the trial. Decide whether billing should start when the trial ends.
+13. `ROADMAP.md` is stale. This file replaces it.
+
+**Notes for whoever does the Next.js upgrade:** the worktree at `C:\Users\kylei\tradequote-pro-saas\.claude\worktrees\ecstatic-carson-ca9eb4` has 23 uncommitted files that are an unfinished attempt at it.
+
+**Set aside, not applied:** branch `set-aside/outside-edits-2026-11-11` holds two edits made to this folder by another tool on 2026-11-11. One pinned the company profile route to a fixed company id; the other rewrote the health check with an import that does not exist, which broke the build. Do not apply them. To inspect: `git diff HEAD set-aside/outside-edits-2026-11-11`.
 
 ## What is left: only the owner can do
 
 The full list is in `README.md` under "Before you sell it". In short:
 
-- **Check `.continue/agents/new-config.yaml` for a committed API key and revoke it** (README, "Do first").
+- **Revoke the API key committed in `.continue/agents/new-config.yaml`**, remove the file from the repo, and decide whether the GitHub repo should be public at all (README, "Do first").
+- Fix the GitHub billing lock so the CI checks run.
+- **Decide the price.** `$299 CAD` in `lib/plan.ts` is a placeholder and must match the Stripe Price. The pricing page advertises a 40% founding offer whose Stripe coupon does not exist yet: create it or take the offer down.
+- Back up the untracked `sales/` and `ds/` folders in `C:\Users\kylei\tradequote-pro-saas`. They hold prospect lists, so keep them out of a public repo.
+- Run one real paid journey on the deployed site (sign up, pay with a Stripe test card, cancel in the portal), and try the app by hand on a phone: install, camera, signature.
 - Supabase production project: run every file in `supabase/migrations/` in name order, set the auth URLs and email templates from the README table, set up custom SMTP, turn on backups.
 - Stripe: product and monthly CAD price, webhook to `/api/stripe/webhook`, customer portal, tax.
 - Resend account with a verified domain. Claude API key.
@@ -102,4 +115,10 @@ The full list is in `README.md` under "Before you sell it". In short:
 
 ## Browser check
 
-Pending. This section is updated once the new pages have been opened at desktop and phone widths.
+Done on 2026-11-11 against the local build, signed in as a test owner.
+
+- **Desktop:** Command Center and the pipeline board render correctly, with the search box, the new menu links and the create button.
+- **Phone width (375px):** Command Center, calendar and the client portal render with no sideways scroll; the bottom bar and create button sit clear of the content; portal buttons are 48px or taller.
+- **Search:** typing a proposal's name found it, and Enter opened it with the client-link panel showing.
+- **Found and fixed:** the Assemblies page scrolled sideways on a phone, and the "Back to" link on every page was 39px tall.
+- **Not looked at in a browser:** the client profile page and the Assemblies page after the fix (both are covered by the end-to-end run, which checks content, not layout), the estimate editor's assembly picker, and drag and drop on the pipeline board.
