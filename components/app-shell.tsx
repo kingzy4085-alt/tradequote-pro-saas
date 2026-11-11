@@ -21,6 +21,8 @@ interface Props {
   canWrite: boolean;
   trialDaysLeft: number | null;
   canManageBilling: boolean;
+  /** Stripe is still retrying a failed payment. The company can edit for now, so say so before that stops. */
+  pastDue?: boolean;
   /** The "new" shortcuts this person's role can use. Empty when the company is read-only. */
   quickActions?: QuickAction[];
   /** Up to four pages for the phone's bottom bar. "More" opens the full menu. */
@@ -28,7 +30,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-export default function AppShell({ groups, companyName, userLabel, canWrite, trialDaysLeft, canManageBilling, quickActions = [], mobileTabs = [], children }: Props) {
+export default function AppShell({ groups, companyName, userLabel, canWrite, trialDaysLeft, canManageBilling, pastDue = false, quickActions = [], mobileTabs = [], children }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -139,6 +141,21 @@ export default function AppShell({ groups, companyName, userLabel, canWrite, tri
               </Link>
             ) : (
               'Ask your company owner to update billing.'
+            )}
+          </div>
+        )}
+        {canWrite && pastDue && (
+          <div role="alert" className="print:hidden bg-red-500/10 border-b border-red-500/30 px-4 py-3 text-sm text-red-300">
+            Your last payment did not go through.{' '}
+            {canManageBilling ? (
+              <>
+                <Link href="/settings/billing" className="font-semibold underline">
+                  Update your card
+                </Link>{' '}
+                so your subscription stays active.
+              </>
+            ) : (
+              'Ask your company owner to update the card so the subscription stays active.'
             )}
           </div>
         )}

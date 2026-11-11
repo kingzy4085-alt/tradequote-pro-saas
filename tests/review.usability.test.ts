@@ -452,6 +452,17 @@ describe('what the copy promises', () => {
     const small = [...board, ...pad, ...shell].filter((b) => b.height < 44).map((b) => `${b.text} ${b.height}px`);
     expect(small).toEqual([]);
   });
+
+  it('a company whose card is failing is told so, with the fix offered only to those who can make it', () => {
+    const shell = (props: object) => renderToStaticMarkup(createElement(AppShell, { groups: [], companyName: 'First', userLabel: 'sam', canWrite: true, trialDaysLeft: null, canManageBilling: true, children: null, ...props }));
+    expect(shell({})).not.toContain('payment did not go through');
+    expect(shell({ pastDue: true })).toMatch(/payment did not go through[\s\S]*href="\/settings\/billing"/);
+    const crew = shell({ pastDue: true, canManageBilling: false });
+    expect(crew).toContain('payment did not go through');
+    expect(crew).not.toContain('href="/settings/billing"');
+    // Once editing has stopped, the read-only notice says it instead
+    expect(shell({ pastDue: true, canWrite: false })).not.toContain('payment did not go through');
+  });
 });
 
 describe('the first form a contractor fills in', () => {

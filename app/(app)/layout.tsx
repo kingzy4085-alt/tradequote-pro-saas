@@ -70,6 +70,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       canWrite={ctx.canWrite}
       trialDaysLeft={trialDaysLeft}
       canManageBilling={hasRank(ctx.role, 4)}
+      pastDue={ctx.company.subscription_status === 'past_due'}
       quickActions={quickActions(ctx.role, ctx.canWrite)}
       mobileTabs={mobileTabs}
     >
