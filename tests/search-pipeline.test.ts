@@ -41,7 +41,7 @@ describe('global search', () => {
   it('links a hit to its own page, or to its list narrowed to that record', () => {
     const id = '7b0e7a52-6c5e-4d0e-9a55-0f6f3d2b9d11';
     expect(hitHref('estimates', id, 'Panel upgrade')).toBe(`/estimates/${id}`);
-    expect(hitHref('crm', id, 'Smith & Sons')).toBe('/crm?q=Smith+%26+Sons');
+    expect(hitHref('vendors', id, 'Smith & Sons')).toBe('/vendors?q=Smith+%26+Sons');
   });
 
   it('shows the column that matched when the title did not', () => {
