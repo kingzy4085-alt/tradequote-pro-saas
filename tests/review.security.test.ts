@@ -344,6 +344,13 @@ describe('seams that hold: grants and row security', () => {
     ]);
   });
 
+  // A view or table granted to the public key skips row security entirely: anyone on the internet could
+  // read every company's rows through it. Public features go through a server route (lib/portal-server.ts).
+  it('the public key can read and write no table, view or column at all', async () => {
+    expect(await t.asSystem(`select table_name, privilege_type from information_schema.role_table_grants where grantee = 'anon' and table_schema = 'public'`)).toEqual([]);
+    expect(await t.asSystem(`select table_name, column_name, privilege_type from information_schema.column_privileges where grantee = 'anon' and table_schema = 'public'`)).toEqual([]);
+  });
+
   it('a database upgraded from the old baseline ends up with the same security as a new one', async () => {
     const snapshot = async (db: TestDb<U>) => ({
       policies: await db.asSystem(`select tablename, policyname, cmd, roles::text, qual, with_check from pg_policies where schemaname in ('public', 'storage') order by 1, 2`),
