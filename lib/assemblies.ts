@@ -173,4 +173,47 @@ export const STARTER_ASSEMBLIES: AssemblyInput[] = [
       line('Connectors and staples', 1, 'ea', 1.5, 0),
     ],
   },
+  // Industrial. Cable sizes and lug counts are a starting point: set them for the motor and the run.
+  {
+    name: 'Motor Termination, 9-Lead', category: 'Industrial',
+    lines: [
+      line('Identify and tag 9 motor leads, confirm wye or delta connection for the supply voltage', 1, 'ea', 0, 0.75),
+      line('Compression lugs and hardware for lead connections', 6, 'ea', 6, 0.15),
+      line('Motor lead insulation kit (boots or tape system)', 1, 'ea', 45, 0.75),
+      line('Insulation resistance (megger) test and record', 1, 'ea', 0, 0.5),
+      line('Bump test for rotation, correct if reversed', 1, 'ea', 0, 0.5),
+    ],
+  },
+  {
+    name: 'Motor Termination, 12-Lead', category: 'Industrial',
+    lines: [
+      line('Identify and tag 12 motor leads, confirm connection diagram for the supply voltage and start method', 1, 'ea', 0, 1),
+      line('Compression lugs and hardware for lead connections', 9, 'ea', 6, 0.15),
+      line('Motor lead insulation kit (boots or tape system)', 1, 'ea', 60, 1),
+      line('Insulation resistance (megger) test and record', 1, 'ea', 0, 0.5),
+      line('Bump test for rotation, correct if reversed', 1, 'ea', 0, 0.5),
+    ],
+  },
+  {
+    name: 'Teck90 Power Cable Run, 30 m', category: 'Industrial',
+    lines: [
+      line('Teck90 armoured cable, 3C with ground (size to suit)', 30, 'm', 28, 0.12),
+      line('Teck connector, sized to cable', 2, 'ea', 55, 0.5),
+      line('Cable tray clamps or strut straps', 20, 'ea', 2.5, 0.05),
+      line('Strip armour, terminate and torque both ends', 2, 'ea', 0, 1),
+      line('Insulation resistance (megger) test and record', 1, 'ea', 0, 0.5),
+      line('Cable tag, both ends', 2, 'ea', 3, 0.1),
+    ],
+  },
+  {
+    name: 'Teck90 Control Cable Run, 30 m', category: 'Industrial',
+    lines: [
+      line('Teck90 armoured control cable, multi-conductor #14 (count to suit)', 30, 'm', 9, 0.08),
+      line('Teck connector, sized to cable', 2, 'ea', 22, 0.35),
+      line('Cable tray clamps or strut straps', 20, 'ea', 2.5, 0.05),
+      line('Strip armour, terminate and ferrule conductors, both ends', 2, 'ea', 8, 1.25),
+      line('Point-to-point continuity check', 1, 'ea', 0, 0.5),
+      line('Cable tag, both ends', 2, 'ea', 3, 0.1),
+    ],
+  },
 ];

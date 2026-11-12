@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { assemblySummary, expandAssembly, filterAssemblies, insertLines, isFilledLine, parseMultiplier, type Assembly } from '@/lib/assemblies';
 import { estimateTotals, type EstimateLine } from '@/lib/estimate-math';
+import { DEFAULT_NPT_PERCENT, isPermitLine, nptLine, parseNptPercent, permitDescription, productiveHours, withNptAllowance, withPermitLine } from '@/lib/industrial';
 import { formatMoney } from '@/lib/format';
 
 const BLANK: EstimateLine = { description: '', quantity: 1, unit: 'ea', material_unit_cost: 0, labour_hours_per_unit: 0 };
@@ -23,6 +24,7 @@ export default function EstimateEditor({
   initialItems,
   statuses,
   proposal,
+  province,
   canWrite,
 }: {
   estimate: Record<string, unknown> & { id: string };
@@ -30,6 +32,8 @@ export default function EstimateEditor({
   statuses: string[];
   /** The proposal made from this estimate, if there is one. */
   proposal: { id: string; status: string } | null;
+  /** The company's province, which decides how the permit line is worded. */
+  province?: string;
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -42,6 +46,9 @@ export default function EstimateEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Industrial extras: the non-productive time allowance and the permit line
+  const [nptPct, setNptPct] = useState(String(DEFAULT_NPT_PERCENT));
+  const [extraNote, setExtraNote] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   // Saved assemblies: 'add' picks one from the library, 'save' turns ticked lines into a new one
   const [panel, setPanel] = useState<'add' | 'save' | null>(null);
   const [library, setLibrary] = useState<Assembly[] | null>(null);
@@ -78,6 +85,21 @@ export default function EstimateEditor({
     // Ticks follow their lines
     setPicked((p) => new Set([...p].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
   };
+
+  function addNpt() {
+    const hours = productiveHours(items);
+    if (hours <= 0) return setExtraNote({ tone: 'error', text: 'Add your lines with labour hours first. The allowance is a share of those hours.' });
+    const pct = parseNptPercent(nptPct);
+    const line = nptLine(items, pct);
+    editItems(withNptAllowance(items, pct));
+    setExtraNote({ tone: 'success', text: `Non-productive time is ${line.labour_hours_per_unit} hours: ${pct}% of the ${hours} labour hours on the other lines. Press the button again after changing lines. Save the estimate to keep it.` });
+  }
+
+  function addPermit() {
+    if (items.some(isPermitLine)) return setExtraNote({ tone: 'error', text: 'This estimate already has a permit line. Type the fee in its material cost.' });
+    editItems(withPermitLine(items, province));
+    setExtraNote({ tone: 'success', text: `Added "${permitDescription(province)}". Type the fee from the authority's schedule in its material cost. Markup applies to it like any other line.` });
+  }
 
   async function openAdd() {
     setPanel('add');
@@ -352,6 +374,24 @@ export default function EstimateEditor({
               <button type="button" onClick={() => (panel === 'save' ? setPanel(null) : openSave())} aria-expanded={panel === 'save'} className={lineAction}>
                 Save lines as assembly
               </button>
+            </div>
+          )}
+          {canEditLines && (
+            <div className="p-3 border-t border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-44">
+                  <Label htmlFor="npt-percent">Non-productive time %</Label>
+                  <Input id="npt-percent" type="number" min={0} max={100} step="any" value={nptPct} onChange={(e) => setNptPct(e.target.value)} />
+                </div>
+                <Button variant="secondary" onClick={addNpt}>
+                  Add or update NPT allowance
+                </Button>
+                <Button variant="secondary" onClick={addPermit}>
+                  Add permit and inspection fee
+                </Button>
+              </div>
+              <p className="text-sm text-slate-400">The allowance covers time that installs nothing: lockout/tagout, site orientation, permits and waiting on isolations.</p>
+              {extraNote && <Alert tone={extraNote.tone}>{extraNote.text}</Alert>}
             </div>
           )}
           {canEditLines && (asmNote || panel) && (

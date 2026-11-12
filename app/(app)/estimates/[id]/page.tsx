@@ -33,6 +33,7 @@ export default async function EstimatePage({ params }: { params: { id: string } 
       initialItems={items ?? []}
       statuses={mod.statuses}
       proposal={proposal}
+      province={ctx.company.province}
       canWrite={ctx.canWrite && hasRank(ctx.role, mod.write)}
     />
   );
