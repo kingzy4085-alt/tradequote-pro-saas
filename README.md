@@ -103,6 +103,7 @@ Create a [Resend](https://resend.com) account, verify your sending domain and ad
 | `BUSINESS_NAME`, `BUSINESS_MAILING_ADDRESS` | Required in commercial email under Canada's anti-spam law. A PO box is fine |
 | `UNSUBSCRIBE_SECRET` | Signs unsubscribe links. Keep it separate from `CRON_SECRET`, and don't change it later: old links would stop working |
 | `OPERATOR_EMAIL` | Who hears when the automation fails or stops running, and about new leads. Defaults to `EMAIL_REPLY_TO` |
+| `SUPPORT_EMAIL` | Optional. The address customers write to, shown on the help page, every error screen and the pricing page. Defaults to `EMAIL_REPLY_TO`. With neither, error screens say to contact the company that set up the account. Pages built ahead, like pricing, take it at build time, so redeploy after changing it |
 
 ### 5. Scheduled jobs
 
@@ -132,6 +133,8 @@ npm run dev
 ### 7. Deploy
 
 Deploy on Vercel with the settings above. On a Vercel production build, `npm run build` first runs [`scripts/check-env.ts`](scripts/check-env.ts), which fails the deploy and lists any setting that is missing or wrong, by name only. It requires an `https` site address and a live Stripe key, so a production deploy can't go out in test mode or without email. Preview builds skip it. To try it yourself: `node --env-file=.env.local scripts/check-env.ts --force`.
+
+When a signed-in person sees an error screen, it reports the failure to `/api/client-errors`, which writes one line of JSON to the server log: `"event":"client_error"` with the company, user, role, page, error reference and message (never the stack, anything typed or cookies). Search the Vercel logs for `client_error` to see what customers hit. Each server counts reports in memory and takes up to 10 per person every 10 minutes. The reference matches the one on their error screen and in the subject of their email to `SUPPORT_EMAIL`.
 
 ## Upgrading a live database
 

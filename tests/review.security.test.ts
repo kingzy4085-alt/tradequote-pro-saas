@@ -420,7 +420,7 @@ describe('seams that hold: routes and the service role', () => {
   });
 
   it('every write route is closed to a lapsed company, except those that have to stay open', () => {
-    const exempt = ['app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
+    const exempt = ['app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/client-errors/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
     for (const { path, src } of routes) {
       if (!/requireApi\(/.test(src) || exempt.includes(path)) continue;
       const handlers = src.split(/export async function /).filter((s) => /^(POST|PUT|PATCH|DELETE)/.test(s));
@@ -430,6 +430,18 @@ describe('seams that hold: routes and the service role', () => {
     for (const name of ['createRecord', 'updateRecord', 'deleteRecord']) {
       expect(crud.split(`export async function ${name}`)[1].split('export async function')[0], name).toMatch(/write: true/);
     }
+  });
+
+  it('the error report route stays open to a lapsed company only because it stores nothing', () => {
+    const report = routes.find((r) => r.path === 'app/api/client-errors/route.ts')!.src;
+    // Any signed-in member, and the one thing it does is log: no database, no service role, nothing sent on
+    expect([...report.matchAll(/export async function (\w+)/g)].map((m) => m[1])).toEqual(['POST']);
+    expect(report).toContain('requireApi({ minRank: 1 })');
+    expect(report).not.toMatch(/supabase|createSupabase|fetch\(|sendEmail|write: true/);
+    expect(readFileSync('lib/client-errors.ts', 'utf8')).not.toMatch(/createSupabase|\.from\(|\.rpc\(|fetch\(/);
+    // Who is calling is settled before the body is read, and the answer carries nothing the caller sent
+    expect(report.indexOf('requireApi(')).toBeLessThan(report.indexOf('readJson('));
+    for (const [, reply] of report.matchAll(/jsonError\(\d+, ([^)]*)\)/g)) expect(reply).toMatch(/^'[^']*'$/);
   });
 
   it('every cron route refuses a missing or wrong secret, and refuses when none is set', async () => {

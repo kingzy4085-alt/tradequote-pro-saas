@@ -1,4 +1,6 @@
+import { SupportLine } from '@/components/support-contact';
 import { ButtonLink } from '@/components/ui';
+import { env } from '@/lib/env';
 
 export const metadata = { title: 'Page not found · TradeQuote PRO' };
 
@@ -12,6 +14,7 @@ export default function NotFound() {
         <div className="mt-6 flex justify-center">
           <ButtonLink href="/">Back to Command Center</ButtonLink>
         </div>
+        <SupportLine email={env.supportEmail()} lead="Think this page should be here?" subject="TradeQuote PRO page not found" />
       </div>
     </main>
   );
