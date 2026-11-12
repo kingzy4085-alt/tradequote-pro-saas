@@ -562,6 +562,7 @@ async function main() {
   check('the starters only load into an empty library', (await POST(pm, '/api/assemblies/starters')).status === 409);
   const library = must('listing assemblies', await GET(pm, '/api/assemblies'), 200).data;
   check('the library comes back with every assembly and its lines', library.length >= 8 && library.every((a) => a.lines.length > 0 && a.lines.every((l) => 'material_unit_cost' in l && !('sort' in l))), library.length);
+  check('the starters include the industrial ones', ['Motor Termination, 9-Lead', 'Motor Termination, 12-Lead', 'Teck90 Power Cable Run, 30 m'].every((name) => library.some((a) => a.name === name)));
   const kit = must('saving an assembly', await POST(pm, '/api/assemblies', { name: `Kit ${RUN}`, category: 'Test', lines: [boxLine] }), 201).data;
   check('a second assembly with the same name is refused, whatever the capitals', (await POST(pm, '/api/assemblies', { name: `KIT ${RUN}`, lines: [boxLine] })).status === 409);
   check('an assembly with no lines is refused', (await POST(pm, '/api/assemblies', { name: `Empty ${RUN}`, lines: [] })).status === 400);
@@ -598,6 +599,7 @@ async function main() {
   check('the client opens it with no login', portalPage.status === 200 && portalHtml.includes(`Offer ${RUN}`) && portalHtml.includes('Add two receptacles.'), portalPage.status);
   check('the client sees the price and none of the internal notes', portalHtml.includes('4,200') && !portalHtml.includes('INTERNAL'));
   check('the page is kept out of search engines', /noindex/.test(portalHtml));
+  check('the client can save their own copy as a PDF', portalHtml.includes('Save PDF'));
   check('the contractor sees the client opened it', must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'viewed');
 
   const madeUp = 'A'.repeat(43);
@@ -624,6 +626,8 @@ async function main() {
   check('the answer cannot be undone by turning the link off', must('turning off', await DELETE(pm, `/api/proposals/${offer.id}/share`), 200).ok === true && must('link status', await GET(pm, `/api/proposals/${offer.id}/share`), 200).data.status === 'accepted');
   const afterHtml = await (await fetch(`${S.app}/portal/${secondToken}`)).text();
   check('the link now shows it was accepted, and by whom', afterHtml.includes('Accepted') && afterHtml.includes('Sam Client') && !afterHtml.includes('Accept and sign'));
+  const signedPrint = await (await fetch(`${S.app}/print/proposal/${offer.id}`, { headers: { cookie: pm.cookie }, redirect: 'manual' })).text();
+  check('the printed proposal carries the client signature', signedPrint.includes('Accepted online by Sam Client') && signedPrint.includes('data:image/png;base64,'));
   check('the signed proposal becomes a project like any accepted one', (await POST(pm, `/api/proposals/${offer.id}/convert`)).status === 201);
 
   const declinedOffer = must('a second proposal', await POST(pm, '/api/modules/proposals', { title: `Decline ${RUN}`, status: 'Sent', client_id: client.id, client_name: client.title, total_amount: 900 }), 201).data;
