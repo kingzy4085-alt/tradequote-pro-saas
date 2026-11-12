@@ -40,6 +40,7 @@ async function compress(file: File): Promise<Blob> {
 }
 
 export default function DailyLogPage({ params }: { params: { id: string } }) {
+  const { id } = React.use(params);
   const [log, setLog] = useState<Log | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -54,7 +55,7 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
       .then((r) => r.json())
       .then((j) => (j.success ? setLog({ ...j.data, photos: j.data.photos || [] }) : setError(j.error)))
       .catch(() => setError('Could not load this log.'));
-  }, [params.id]);
+  }, [id]);
 
   // Private photos are shown through short-lived links
   useEffect(() => {
@@ -251,3 +252,4 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
     </main>
   );
 }
+
