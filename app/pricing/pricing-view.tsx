@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { SupportEmailLink } from '@/components/support-contact';
 import { FOUNDING_OFFER, PLAN_FEATURES, PLAN_NAME, foundingPriceLabel, planPriceLabel } from '@/lib/plan';
 
 const PAINS = [
@@ -49,7 +50,8 @@ function Cell({ v }: { v: string }) {
   return <span className="text-slate-400">{v}</span>;
 }
 
-export default function PricingView() {
+/** `supportEmail` comes from the server (env.supportEmail()); without one the page ends at the questions. */
+export default function PricingView({ supportEmail }: { supportEmail?: string }) {
   // `website` is a honeypot: hidden from people, filled in by bots
   const [form, setForm] = useState({ name: '', company: '', email: '', phone: '', website: '' });
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
@@ -242,6 +244,15 @@ export default function PricingView() {
           ))}
         </div>
       </section>
+
+      {supportEmail && (
+        <footer className="border-t border-slate-800">
+          <p className={`${section} py-8 flex flex-wrap items-center justify-center gap-x-2 text-center text-sm text-slate-400`}>
+            {'Questions before you start? Email '}
+            <SupportEmailLink email={supportEmail} subject="TradeQuote PRO question" />
+          </p>
+        </footer>
+      )}
     </main>
   );
 }

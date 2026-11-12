@@ -1,5 +1,7 @@
 import { IfNavLink } from '@/components/nav-links';
+import { SupportEmailLink } from '@/components/support-contact';
 import { PageHeader, Panel } from '@/components/ui';
+import { env } from '@/lib/env';
 
 export const metadata = { title: 'How to Use · TradeQuote PRO' };
 
@@ -29,6 +31,7 @@ const TIPS = [
 ];
 
 export default function HelpPage() {
+  const supportEmail = env.supportEmail();
   return (
     <>
       <PageHeader title="How to Use TradeQuote PRO" subtitle="From first call to final bill." back={{ href: '/', label: 'Back to Command Center' }} />
@@ -56,6 +59,15 @@ export default function HelpPage() {
           ))}
         </ul>
       </Panel>
+      {supportEmail && (
+        <Panel title="Need help?" className="mt-8 max-w-4xl">
+          <p className="text-slate-300">
+            {'Email '}
+            <SupportEmailLink email={supportEmail} subject="TradeQuote PRO help" />
+            {'. Say which page you were on and what you pressed. If an error screen showed a reference, include it.'}
+          </p>
+        </Panel>
+      )}
     </>
   );
 }

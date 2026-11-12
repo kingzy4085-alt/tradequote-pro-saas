@@ -1,3 +1,4 @@
+import { env } from '@/lib/env';
 import PricingView from './pricing-view';
 
 export const metadata = {
@@ -6,5 +7,5 @@ export const metadata = {
 };
 
 export default function PricingPage() {
-  return <PricingView />;
+  return <PricingView supportEmail={env.supportEmail()} />;
 }
