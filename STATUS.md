@@ -6,7 +6,8 @@ Last updated 2026-11-11. Written so that you, another developer, or another AI t
 
 - **Folder:** `C:\Users\kylei\OneDrive\Desktop\tradequote-pro-saas\vigorous-einstein-749064` (a git worktree of `C:\Users\kylei\tradequote-pro-saas`).
 - **Branch with everything:** `claude/trade-quote-pro-saas2-status-b309fa`. It is **not pushed**. `master` and GitHub are behind it.
-- **To make it the main line:** `git checkout master`, then `git merge --ff-only claude/trade-quote-pro-saas2-status-b309fa`, then `git push`.
+- **To make it the main line:** run `pwsh scripts/ship-to-master.ps1`. It verifies, fast-forwards GitHub `master` and asks before pushing.
+- **Do not build in `C:\Users\kylei\tradequote-pro-saas`.** That folder is on the old branch `feat/installable-app`, which has none of this work. On 2026-11-11 another tool was working there: uncommitted changes, a Next.js 16 upgrade, and the old `app/estimates` layout. Anything built there is being built a second time on a much older app and will not merge into this one. Point every tool at this folder and branch, or publish this branch first and work from `master`.
 - **Old branches, safe to ignore:**
   - `claude/app-build-automation-ed8856`: merged into this branch.
   - `feat/finish-port`: a second, separate build of change orders, invoices, job costing and timecards. Not merged. It also has a plan-tiers screen (`lib/plans.ts`) that this branch lacks; nobody has checked whether it is worth porting.
@@ -55,8 +56,10 @@ Stack: Next.js 14.2 (App Router), Supabase (Postgres with row level security, Au
 - Global search (Ctrl+K), floating create button, phone bottom navigation.
 - Quote pipeline board (drag or menu to move), follow-up list, quote health labels, win rate.
 - Schedule calendar (month, week, phone agenda).
-- Saved assemblies with a starter library, inserted into estimates.
-- Client portal: share a sent proposal by link; the client accepts with a signature or declines, no account.
+- Saved assemblies with a starter library, inserted into estimates. The starters include 9-lead and 12-lead motor terminations and Teck90 power and control cable runs.
+- Industrial estimating: a non-productive time allowance (lockout/tagout, orientation, permits) as a percent of labour, and a permit and inspection line named for the company's province (TSASK in Saskatchewan), with the fee typed by the estimator.
+- Client portal: share a sent proposal by link; the client accepts with a signature or declines, no account. The contractor is emailed the answer, and the printed proposal carries the signature.
+- GST/HST number on the company profile and every printed letterhead. A banner while a payment is failing.
 
 **Modules with their own purpose-built pages (14 of 45):** estimates, proposals, projects, change orders, invoices, progress billing draws, job costing, timecards, daily logs, LOTO permits, tailgate meetings, safety inspections, clients (profile page), crew schedule (calendar).
 
@@ -88,10 +91,10 @@ Stack: Next.js 14.2 (App Router), Supabase (Postgres with row level security, Au
 Most valuable first.
 
 1. **Upgrade Next.js.** Version 14 has open security advisories (README, "Known security advisories"). The image optimizer is blocked in `middleware.ts` as a stopgap.
-2. **Tell the contractor when a client answers a proposal** (email or an alert). Today the answer shows on the proposal and the pipeline, but nothing is sent.
+2. **An in-app alert when a client answers a proposal.** The email is done (`lib/portal-notify.ts`); the Attention panel does not show it yet.
 3. **Portal line items.** The client sees scope, terms and the total, not the line-by-line breakdown. It was left out so cost and markup cannot leak; it needs sell prices worked out in SQL.
 4. **File and drawing attachments** (drag and drop, previews). Photos work on daily logs and safety records only.
-5. **Plan tiers.** Checkout sells one plan. `feat/finish-port` has an unverified tiers screen.
+5. **Plan tiers.** Checkout sells one plan. Tiers cannot be built until you decide them: the tier names, the price of each, and what each includes. `feat/finish-port` has an unverified tiers screen.
 6. **From the feature wishlist, not started:** quote builder as a step-by-step wizard, AI estimate from a scope document, offline mode, the photo-and-measure site visit flow, a light theme (the app is dark only), swipe actions, deposit payment and file upload in the client portal, accounting export.
 7. **Account deletion and data export** for customers. Neither exists, and the draft Terms promise both.
 8. **No company logo on printed documents.** The GST/HST registration number is done: it is on the company profile and prints on every letterhead.

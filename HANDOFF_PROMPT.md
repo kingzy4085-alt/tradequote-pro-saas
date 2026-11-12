@@ -1,51 +1,55 @@
-# Prompt to give another AI coding tool
+# One prompt to finish the build
 
-Paste everything below the line into the other tool, with this repo folder open.
+Paste everything below the line into an AI coding tool (Claude Code, Cursor, Copilot agent) with this folder open. Or run `pwsh scripts/continue-build.ps1 -Tasks 10`, which feeds it the tasks one at a time and checks each.
 
 ---
 
-You are continuing work on **TradeQuote PRO**, a Next.js 14 (App Router) + Supabase + Stripe SaaS for Canadian electrical contractors.
+You are finishing **TradeQuote PRO**, a Next.js 14 + Supabase + Stripe SaaS for Canadian industrial and electrical contractors. Work through every task below, in order, without stopping to ask, until all are done or one is truly blocked.
 
-## Start here
+## Ground rules
 
-1. Work in `C:\Users\kylei\OneDrive\Desktop\tradequote-pro-saas\vigorous-einstein-749064` on branch `claude/trade-quote-pro-saas2-status-b309fa`. It has everything. Do not use `master`, `feat/finish-port` or any other branch.
-2. Read `STATUS.md` (what is built, verified and left), then `README.md` (setup), then `AGENTS.md`.
-3. Run `npm ci`, then `npm test` and `npm run build`. Both must pass before you change anything. If they do not, stop and fix that first.
-4. Do **not** apply branch `set-aside/outside-edits-2026-11-11`. It holds two broken edits (a hard-coded company id and a health check with a bad import).
+1. **Folder and branch:** `C:\Users\kylei\OneDrive\Desktop\tradequote-pro-saas\vigorous-einstein-749064`, branch `claude/trade-quote-pro-saas2-status-b309fa`. Never work in `C:\Users\kylei\tradequote-pro-saas` (an old branch with none of this work). Never apply branch `set-aside/outside-edits-2026-11-11`.
+2. **Read first:** `STATUS.md`, then `README.md`, then `AGENTS.md`.
+3. **Prove the starting point:** `pwsh scripts/verify.ps1`. It must end with "All checks passed." If it doesn't, fixing that is task zero.
+4. **The loop, for every task:**
+   - Read the files the task names, plus one similar existing feature, and copy its patterns.
+   - Build it with tests: logic in `lib/*.ts` with a test in `tests/`; database rules tested with `bootDb` from `tests/helpers/db.ts` (see `tests/assemblies.test.ts`, `tests/portal.test.ts`).
+   - Run `pwsh scripts/verify.ps1` and fix until it passes. Never delete or weaken a test to get green.
+   - Commit that one feature with a message that says why. Mark the task `[done]` in this file and update `STATUS.md` in the same commit.
+   - Go to the next task.
+5. **If a task is blocked** (it needs an owner decision, an account or a key): write why under a "Blocked" heading at the top of `STATUS.md`, skip it, and continue with the next one.
+6. **Never** push, deploy, force anything, switch branches, or touch real Stripe, Resend or Supabase production. Publishing is `pwsh scripts/ship-to-master.ps1`, run by the owner.
 
-## Rules (the test suite enforces them)
+## Rules the test suite enforces
 
-- Run `npm test` and `npm run build` before every commit. Never commit with a failing test, and never delete or weaken a test to get green.
-- Nothing in the database may run for the public (anon) key. A public feature goes through a server route. Copy the pattern in `lib/portal-server.ts`.
-- Only files on the allowlists in `tests/review.security.test.ts` and `tests/automation.test.ts` may use the service-role key.
+- Nothing in the database runs for the public (anon) key. Public features go through a server route; copy `lib/portal-server.ts`.
+- Only allowlisted files use the service-role key (lists in `tests/review.security.test.ts` and `tests/automation.test.ts`). Adding a file is deliberate, with a test pinning what it may do.
 - Every API route calls `requireApi(...)` (with `write: true` on writes) or `requireCron(...)`.
-- Database changes are a **new** file in `supabase/migrations/`, named `YYYYMMDDHHMMSS_name.sql`, safe to run twice, LF line endings, with row level security and explicit grants on new tables. Copy `20261112000020_assemblies.sql`. Never edit an existing migration.
-- After editing `lib/modules.ts` run `npm run db:generate`.
-- Every company-scoped query runs as the signed-in user (`ctx.supabase`). Never take a company id from the client or hard-code one.
-- Put logic in `lib/*.ts` with a test in `tests/`. Database rules get a test using `bootDb` from `tests/helpers/db.ts` (see `tests/assemblies.test.ts`).
-- Buttons and links: `min-h-[48px] lg:min-h-0`. Dark slate and amber UI, plain English, no emoji.
-- One feature per commit, with a message that says why.
+- Database changes are a NEW file `supabase/migrations/YYYYMMDDHHMMSS_name.sql`: safe to run twice, LF line endings, row level security and explicit grants on new tables, new columns on `companies` granted one by one. Never edit an existing migration. After editing `lib/modules.ts`, run `npm run db:generate`.
+- Company-scoped queries run as the signed-in user (`ctx.supabase`). Never take a company id from the client or hard-code one.
+- Server-rendered text that tests or emails match should be one string: `{`Label ${value}`}`, not `Label {value}` (React inserts `<!-- -->` between them).
+- Buttons and links are `min-h-[48px] lg:min-h-0`. Dark slate and amber UI, plain English, no emoji.
 
-## Tasks, in order
+## Tasks
 
-Do them one at a time. After each: tests, build, commit.
+1. **[done]** GST/HST number on the company profile and every printed letterhead.
+2. **[done]** Email the contractor when a client answers a shared proposal (`lib/portal-notify.ts`).
+3. **[done]** Past-due banner while a card payment is failing.
+4. **[done]** Industrial estimating: NPT allowance, provincial permit line, 9/12-lead motor and Teck90 assemblies (`lib/industrial.ts`).
+5. **[done]** Client signature on the printed proposal, and a save-as-PDF button on the client's page.
+6. **In-app alert when a client answers a proposal.** Alerts are recomputed by the daily job in `supabase/migrations/20261104000210_automation.sql` (rules in `automation_rules`, `lib/automation.ts`); an alert not raised on a run is resolved. Add a rule that raises an `info` alert for a proposal answered through `proposal_shares` in the last 7 days, linking to the proposal, for project managers and up. New migration only.
+7. **Line items on the client portal.** Extend `portal_view` (new migration, `create or replace`) to return the estimate's lines at sell price only (markup folded in, as `lineSellPrice` in `lib/estimate-math.ts` does) plus subtotal, tax and total. Never cost, hours, labour rate or markup. Render them like `app/print/proposal/[id]/page.tsx`. Test that cost and markup never appear in the payload.
+8. **Company logo on printed documents.** Upload to a private storage bucket (copy `20261101000100_job_photos_storage.sql` and `lib/daily-log.ts`), PNG or JPEG, 1 MB limit, owner and admin only, shown in `Letterhead` in `lib/print.tsx` through a short-lived signed URL.
+9. **File attachments** on Drawings, Documents and Site Vault: same storage pattern, 25 MB limit, a type allowlist, drag and drop with previews, deletion with the record.
+10. **Partial payments and accounting export.** A `invoice_payments` table (amount, date, method, note), "Record payment" on `app/(app)/invoices/[id]`, the invoice becomes Paid when payments reach the total, and a CSV export of invoices and payments a bookkeeper can import.
+11. **Account deletion and data export** for an owner under `app/(app)/settings/account`: export every company record as a ZIP of CSVs; deletion cancels the Stripe subscription first, then removes the company. Typed confirmation for both.
+12. **Error tracking and support contact.** Sentry (or similar) behind an optional env variable that does nothing when unset, plus a support email on the help page and in error screens.
+13. **In-app alert test, phone check, end-to-end.** Extend `scripts/e2e-local.mjs` to cover tasks 6 to 11, and run `pwsh scripts/verify.ps1 -E2E`.
+14. **Next.js upgrade** to the current patched major, removing the `_next/image` block in `middleware.ts` once safe. Read `node_modules/next/dist/docs/` for the upgrade guide first. Do this last, on its own, with every check green before and after.
+15. **Blocked until the owner decides: plan tiers.** Needs tier names, prices and what each includes. Then: one Stripe Price per tier, tier stored on `companies` by the webhook, module access checked against it in `lib/modules.ts` and row level security.
 
-1. **[done] GST/HST number on printed documents.** `tax_number` is on the company profile (migration `20261112000030_company_tax_number.sql`) and prints on every letterhead. A company logo is still to do, and is not urgent.
-2. **Tell the contractor when a client answers a proposal.** After `answerPortal` succeeds in `lib/portal-server.ts`, raise an alert for the company through the existing alerts system (`lib/alerts.ts`, `lib/automation.ts`, migration `20261104000210_automation.sql`), and email the owner with `sendEmail` from `lib/email.ts` when email is configured.
-3. **Line items on the client portal.** Return sell prices only (markup folded in, never cost or markup) from `portal_view` in a new migration. Match `lineSellPrice` in `lib/estimate-math.ts` and the layout of `app/print/proposal/[id]/page.tsx`. Add a test proving cost and markup never appear in the payload.
-4. **[done] Past-due banner.** `components/app-shell.tsx` shows a notice with a billing link while `subscription_status` is `past_due`.
-5. **File attachments** on Drawings, Documents and Site Vault. Reuse the private storage bucket and signed-URL pattern from daily log photos (`lib/daily-log.ts`, migration `20261101000100_job_photos_storage.sql`). Drag and drop, 25 MB limit, type allowlist.
-6. **Partial payments and an accounting export.** A payments table per invoice, "Record payment" on `app/(app)/invoices/[id]`, and a CSV export of invoices and payments.
-7. **Account deletion and data export** for an owner, under `app/(app)/settings/account`.
-8. **Error tracking and a support contact.** Add Sentry (or similar) behind an env variable, and a support email on the help page.
-9. **Upgrade Next.js to the current patched major** and remove the `_next/image` block in `middleware.ts` once it is safe. Read the upgrade guide first. An unfinished attempt is in the worktree `C:\Users\kylei\tradequote-pro-saas\.claude\worktrees\ecstatic-carson-ca9eb4`.
-10. **Wishlist, only after 1 to 9:** step-by-step quote wizard, AI estimate from a scope document, plan tiers, offline mode, light theme, deposit payment in the portal, the photo-and-measure site visit flow.
+When every task is done or blocked, finish with a short report: what you built, the final `verify.ps1` result, and what is blocked and why.
 
-## Verifying
+## Owner-only (not code)
 
-- `npm run e2e:local` runs 247 real checks against a local Supabase stack and the app on port 3200 (README, "Local end-to-end run"). Extend `scripts/e2e-local.mjs` for each new feature.
-- Open every new page at phone width (375px) and check there is no sideways scroll.
-
-## Not code: only the owner can do these
-
-Listed in `STATUS.md` under "What is left: only the owner can do". The first is urgent: revoke the API key committed in `.continue/agents/new-config.yaml`.
+In `STATUS.md` under "What is left: only the owner can do". First and urgent: revoke the API key that was committed in `.continue/agents/new-config.yaml` (the GitHub repo is public).
