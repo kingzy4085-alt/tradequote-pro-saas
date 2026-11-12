@@ -35,7 +35,9 @@ foreach ($tool in 'git', 'node', 'npm', 'docker', 'supabase') {
 New-Item -ItemType Directory -Force $Root | Out-Null
 
 # 1. The app copy: a clone of this repository's master branch
-$source = (Resolve-Path (Join-Path $repoDir (git -C $repoDir rev-parse --git-common-dir))).Path
+# The shared repository, also when this folder is a worktree of it
+$source = (git -C $repoDir rev-parse --path-format=absolute --git-common-dir)
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $source)) { Fail "Could not find the git repository for $repoDir." }
 if (-not (Test-Path (Join-Path $appDir '.git'))) {
   Write-Host "Copying the app to $appDir"
   Native 'git clone' { git clone --quiet --branch $Branch $source $appDir }
