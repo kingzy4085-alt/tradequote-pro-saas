@@ -23,10 +23,41 @@ export type PortalDecision = z.infer<typeof PortalDecision>;
 
 export type PortalState = 'open' | 'accepted' | 'declined' | 'closed';
 
+/** One line of the proposal as the client sees it: one price with the markup folded in, as lineSellPrice prints it. */
+export interface PortalLine {
+  description: string;
+  quantity: number;
+  unit: string;
+  amount: number;
+}
+
+/** The estimate's totals as the client sees them. `subtotal` is the price before tax. */
+export interface PortalTotals {
+  subtotal: number;
+  tax_percentage: number;
+  tax: number;
+  total: number;
+}
+
+/**
+ * What public.portal_view sends for a link. `lines` and `totals` come only with a proposal built
+ * from an estimate, and never carry a cost, labour hours, the labour rate or the markup.
+ */
 export interface PortalView {
   state: PortalState;
-  company: { name: string; contact?: string | null; phone?: string | null; email?: string | null; address?: string | null };
-  proposal?: { title: string; client_name: string | null; scope_of_work: string | null; terms: string | null; total_amount: number | null; valid_until: string | null; created_on: string };
+  company: { name: string; contact?: string | null; phone?: string | null; email?: string | null; address?: string | null; tax_number?: string | null };
+  proposal?: {
+    title: string;
+    client_name: string | null;
+    client_address?: string | null;
+    scope_of_work: string | null;
+    terms: string | null;
+    total_amount: number | null;
+    valid_until: string | null;
+    created_on: string;
+  };
+  lines?: PortalLine[];
+  totals?: PortalTotals;
   expires_at?: string;
   decided_at?: string | null;
   signer_name?: string | null;
