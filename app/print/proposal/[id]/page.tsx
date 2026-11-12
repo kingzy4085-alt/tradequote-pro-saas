@@ -40,6 +40,21 @@ export default async function PrintProposal({ params }: { params: { id: string }
   const t = est ? estimateTotals(lines, est.labour_rate, est.markup_percentage, est.tax_percentage) : null;
   const terms = p.terms || company.default_terms;
 
+  // The client's acceptance, if they signed from the shared link. A failed read leaves the blank
+  // signature line, which is what a proposal that was never shared prints anyway.
+  type Signed = { signer_name: string | null; signature: string | null; decided_at: string | null };
+  let signed: Signed | null = null as Signed | null;
+  if (p.status === 'Accepted') {
+    try {
+      const { data } = await ctx.supabase.from('proposal_shares').select('signer_name, signature, decided_at').eq('proposal_id', params.id).eq('decision', 'accepted').order('decided_at', { ascending: false }).limit(1).maybeSingle();
+      signed = (data as Signed | null) ?? null;
+    } catch {
+      signed = null;
+    }
+  }
+  // Only ever a drawn PNG: the database refuses anything else when the client signs
+  const signature = signed?.signature?.startsWith('data:image/png;base64,') ? signed.signature : null;
+
   return (
     <main className="min-h-screen bg-white text-gray-700">
       <article className="max-w-[8.5in] mx-auto p-6 sm:p-10 print:p-0 text-sm leading-relaxed">
@@ -121,12 +136,27 @@ export default async function PrintProposal({ params }: { params: { id: string }
         )}
 
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-10 pt-14 break-inside-avoid">
-          {['Accepted by (client)', `For ${company.name}`].map((l) => (
-            <div key={l}>
-              <div className="border-b border-black h-10" />
-              <p className="text-xs mt-1">{l}, signature and date</p>
+          {signed ? (
+            <div>
+              <div className="border-b border-black h-16 flex items-end">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {signature && <img src={signature} alt={`Signature of ${signed.signer_name ?? 'the client'}`} className="max-h-16" />}
+              </div>
+              <p className="text-xs mt-1">
+                Accepted online by {signed.signer_name ?? 'the client'}
+                {signed.decided_at ? ` on ${formatValue('date', String(signed.decided_at).slice(0, 10))}` : ''}
+              </p>
             </div>
-          ))}
+          ) : (
+            <div>
+              <div className="border-b border-black h-10" />
+              <p className="text-xs mt-1">Accepted by (client), signature and date</p>
+            </div>
+          )}
+          <div>
+            <div className="border-b border-black h-10" />
+            <p className="text-xs mt-1">For {company.name}, signature and date</p>
+          </div>
         </section>
 
         <div className="mt-10 flex items-center justify-between gap-4 print:hidden">

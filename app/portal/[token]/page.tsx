@@ -4,6 +4,7 @@ import { formatMoney, formatValue } from '@/lib/format';
 import { isPortalToken } from '@/lib/portal';
 import { loadPortal, portalIp } from '@/lib/portal-server';
 import { Letterhead } from '@/lib/print';
+import PrintButton from '@/app/print/proposal/[id]/print-button';
 import DecisionForm from './decision-form';
 
 export const dynamic = 'force-dynamic';
@@ -71,6 +72,10 @@ export default async function PortalPage({ params }: { params: { token: string }
   const p = view.proposal;
   return (
     <Shell>
+      {/* The client's own copy: the browser's print dialog saves it as a PDF. The answer form is left off the page. */}
+      <div className="flex justify-end mb-4 print:hidden">
+        <PrintButton />
+      </div>
       <Letterhead company={view.company} document="Proposal">
         <p>{formatValue('date', p.created_on)}</p>
         {p.valid_until && <p>Prices valid until {formatValue('date', p.valid_until)}</p>}
