@@ -339,7 +339,7 @@ describe('seams that hold: grants and row security', () => {
       expect(/user_company_id|user_rank|auth\.uid\(\)|auth\.jwt\(\)/.test(f.prosrc), `${f.sig} has no company check`).toBe(true);
     }
     expect(callable.map((f) => f.proname).sort()).toEqual([
-      'accept_invitation', 'change_order_money', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'create_proposal_share', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
+      'accept_invitation', 'change_order_money', 'close_company', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'create_proposal_share', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
       'pending_invitations', 'project_money', 'remove_member', 'revoke_proposal_share', 'safety_photo_open', 'seed_job_budget_from_estimate', 'set_job_budget', 'set_job_closed', 'set_member_role', 'timecard_pay', 'timecard_workers', 'user_company_id', 'user_rank',
     ]);
   });
@@ -420,7 +420,8 @@ describe('seams that hold: routes and the service role', () => {
   });
 
   it('every write route is closed to a lapsed company, except those that have to stay open', () => {
-    const exempt = ['app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
+    // Closing the account has to work for a company that stopped paying, as billing does
+    const exempt = ['app/api/account/close/route.ts', 'app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
     for (const { path, src } of routes) {
       if (!/requireApi\(/.test(src) || exempt.includes(path)) continue;
       const handlers = src.split(/export async function /).filter((s) => /^(POST|PUT|PATCH|DELETE)/.test(s));
