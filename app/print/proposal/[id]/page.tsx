@@ -143,8 +143,7 @@ export default async function PrintProposal({ params }: { params: { id: string }
                 {signature && <img src={signature} alt={`Signature of ${signed.signer_name ?? 'the client'}`} className="max-h-16" />}
               </div>
               <p className="text-xs mt-1">
-                Accepted online by {signed.signer_name ?? 'the client'}
-                {signed.decided_at ? ` on ${formatValue('date', String(signed.decided_at).slice(0, 10))}` : ''}
+                {`Accepted online by ${signed.signer_name ?? 'the client'}${signed.decided_at ? ` on ${formatValue('date', String(signed.decided_at).slice(0, 10))}` : ''}`}
               </p>
             </div>
           ) : (

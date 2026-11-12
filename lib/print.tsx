@@ -29,7 +29,7 @@ export function Letterhead({ company, document, children }: { company: Letterhea
         <h1 className="text-2xl font-bold text-black">{company.name}</h1>
         {company.address && <p>{company.address}</p>}
         <p>{[company.contact, company.phone, company.email].filter(Boolean).join(' · ')}</p>
-        {company.tax_number && <p>GST/HST No. {company.tax_number}</p>}
+        {company.tax_number && <p>{`GST/HST No. ${company.tax_number}`}</p>}
       </div>
       <div className="text-right">
         <p className="text-xl font-bold text-black uppercase tracking-wide">{document}</p>
