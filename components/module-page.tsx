@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Badge, Button, FieldError, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { deviceToday, overdueWord } from '@/lib/alerts';
+import { filesHref, isAttachmentModule } from '@/lib/attachments';
 import { formatValue } from '@/lib/format';
 import { detailHref } from '@/lib/detail-pages';
 import { listViewLabel } from '@/lib/list-views';
@@ -61,6 +62,8 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
   const recordLabel = mod.recordLabel ?? mod.titleLabel;
   const startStatus = pickableStatuses(mod)[0];
   const projectField = useMemo(() => mod.fields.find((f) => f.type === 'project'), [mod]);
+  // Drawings, documents and vault items take files, which everyone who can read the list can open
+  const takesFiles = isAttachmentModule(slug);
 
   const [rows, setRows] = useState<Row[]>([]);
   const [count, setCount] = useState(0);
@@ -266,7 +269,7 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
   }
 
   async function remove(row: Row) {
-    if (!window.confirm(`Delete "${row.title}"? This can't be undone.`)) return;
+    if (!window.confirm(`Delete "${row.title}"${takesFiles ? ' and its files' : ''}? This can't be undone.`)) return;
     setNotice('');
     setLoadError('');
     try {
@@ -302,6 +305,7 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
   const firstLoadFailed = !loading && !loaded && !!loadError;
   const hasMore = loaded && rows.length < count;
   const today = deviceToday();
+  const showActions = canWrite || canDelete || takesFiles;
 
   return (
     <>
@@ -431,7 +435,7 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
                 ))}
                 <th className="p-4">Status</th>
                 <th className="p-4">Created</th>
-                {(canWrite || canDelete) && <th className="p-4 text-right">Actions</th>}
+                {showActions && <th className="p-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-sm">
@@ -463,6 +467,7 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
                   const late = overdueWord(slug, row, today);
                   // A receivable from an invoice follows it, and the database refuses any edit or delete here
                   const followsInvoice = slug === 'receivables' && !!row.invoice_id;
+                  const files = filesHref(slug, row.id);
                   return (
                   <tr key={row.id} className={`transition-colors ${late ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-slate-800/50'}`}>
                     <td className="p-4 font-medium text-white">
@@ -484,8 +489,13 @@ export default function ModulePage({ slug, canWrite, canDelete, initialProject, 
                       {late && late !== row.status && <span className="block sm:inline-block mt-1 sm:mt-0 sm:ml-2 text-xs font-semibold text-red-400 whitespace-nowrap">{late}</span>}
                     </td>
                     <td className="p-4 text-slate-400">{new Date(row.created_at).toLocaleDateString('en-CA')}</td>
-                    {(canWrite || canDelete) && (
+                    {showActions && (
                       <td className="p-4 text-right whitespace-nowrap space-x-2">
+                        {files && (
+                          <Link href={files} aria-label={`Files on ${row.title}`} className="inline-flex items-center min-h-[48px] lg:min-h-0 px-2 text-xs font-semibold text-amber-400 hover:underline">
+                            Files
+                          </Link>
+                        )}
                         {slug === 'proposals' && (
                           <Link href={`/print/proposal/${row.id}`} className="text-xs font-semibold text-amber-400 hover:underline mr-2">
                             Print
