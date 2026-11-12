@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, ButtonLink, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { invoiceTaxLabel, invoiceTotals, lineKind, percentLeft, pricePercentLines, type InvoiceLine } from '@/lib/billing-math';
 import { formatMoney, formatValue } from '@/lib/format';
+import { paymentTotals, type InvoicePayment, type PaymentState } from '@/lib/payments';
 import { NO_OPTIONS, type InvoiceOptions } from './options';
+import PaymentsPanel from './payments-panel';
 
 export interface Invoice {
   id: string;
@@ -49,6 +51,8 @@ const pickButton = 'w-full flex justify-between gap-3 text-left text-sm bg-slate
 export default function InvoiceEditor({
   initial,
   initialOptions,
+  initialPayments,
+  today,
   projects,
   clients,
   canWrite,
@@ -56,12 +60,17 @@ export default function InvoiceEditor({
 }: {
   initial: Invoice;
   initialOptions: InvoiceOptions;
+  /** Null when they could not be loaded. */
+  initialPayments: InvoicePayment[] | null;
+  /** The company's date, YYYY-MM-DD. */
+  today: string;
   projects: { id: string; title: string; client_id: string | null; client_name: string | null }[];
   clients: { id: string; title: string }[];
   canWrite: boolean;
   canDelete: boolean;
 }) {
   const [invoice, setInvoice] = useState(initial);
+  const [payments, setPayments] = useState(initialPayments);
   const [fields, setFields] = useState<Fields>(() => toFields(initial));
   const [lines, setLines] = useState<InvoiceLine[]>(initial.lines ?? []);
   const [options, setOptions] = useState(initialOptions);
@@ -73,6 +82,10 @@ export default function InvoiceEditor({
 
   const draft = invoice.status === 'Draft';
   const editable = canWrite && draft;
+  // Payments hold an invoice where it is: no Draft or Void until they are deleted, and once they add up
+  // to the total only deleting one reopens it. The database refuses those moves; these hide the buttons.
+  const hasPayments = (payments?.length ?? 0) > 0;
+  const paidThroughPayments = invoice.status === 'Paid' && hasPayments && !paymentTotals(invoice, payments ?? []).byHand;
   const contract = options.project?.contract_value;
   // A percent line is priced here only for the preview. The database prices it on save.
   const priced = editable ? pricePercentLines(lines, contract, options.billed_percent_amount, options.billed_percent_lines, options.billed_percent) : lines;
@@ -120,6 +133,12 @@ export default function InvoiceEditor({
     setFields(toFields(data));
     setLines(data.lines ?? []);
     setDirty(false);
+  };
+
+  const paymentsChanged = (state: PaymentState) => {
+    setPayments(state.payments);
+    // Only what a payment moves: an unsaved holdback release date stays as typed
+    setInvoice((i) => ({ ...i, status: state.invoice.status, paid_at: state.invoice.paid_at }));
   };
 
   async function saveAll() {
@@ -235,7 +254,7 @@ export default function InvoiceEditor({
       <div className="space-y-6">
         {error && <Alert>{error}</Alert>}
         {notice && <Alert tone="success">{notice}</Alert>}
-        {!draft && invoice.status !== 'Void' && <Alert tone="info">Only a draft can be edited.{canWrite && invoice.status !== 'Paid' ? ' Set it back to Draft to change it.' : ''}</Alert>}
+        {!draft && invoice.status !== 'Void' && <Alert tone="info">Only a draft can be edited.{canWrite && invoice.status !== 'Paid' && !hasPayments ? ' Set it back to Draft to change it.' : ''}</Alert>}
         {invoice.status === 'Void' && <Alert tone="info">This invoice is void. Its change orders and draws can be billed again.</Alert>}
 
         <Panel title="Details">
@@ -399,6 +418,8 @@ export default function InvoiceEditor({
           </Panel>
         </div>
 
+        <PaymentsPanel invoice={invoice} payments={payments} today={today} canRecord={canWrite} canDelete={canDelete} onChange={paymentsChanged} />
+
         {canWrite && invoice.status !== 'Void' && (
           <Panel title="What happens next">
             <div className="flex flex-wrap gap-2">
@@ -412,17 +433,19 @@ export default function InvoiceEditor({
                   <Button disabled={!!busy} onClick={() => move('Paid', 'Marked as paid. The receivable is collected.')}>
                     Mark paid
                   </Button>
-                  <Button variant="secondary" disabled={!!busy} onClick={() => move('Draft', 'Back to Draft. The receivable was removed.', 'Set this invoice back to Draft? Its receivable is removed until it is sent again.')}>
-                    Back to Draft
-                  </Button>
+                  {!hasPayments && (
+                    <Button variant="secondary" disabled={!!busy} onClick={() => move('Draft', 'Back to Draft. The receivable was removed.', 'Set this invoice back to Draft? Its receivable is removed until it is sent again.')}>
+                      Back to Draft
+                    </Button>
+                  )}
                 </>
               )}
-              {invoice.status === 'Paid' && (
+              {invoice.status === 'Paid' && !paidThroughPayments && (
                 <Button variant="secondary" disabled={!!busy} onClick={() => move('Sent', 'Payment undone. The receivable is open again.', 'Undo this payment? The invoice goes back to Sent and the receivable reopens.')}>
                   Undo payment
                 </Button>
               )}
-              {invoice.status !== 'Paid' && (
+              {invoice.status !== 'Paid' && !hasPayments && (
                 <Button variant="danger" disabled={!!busy} onClick={() => move('Void', 'Voided.', 'Void this invoice? This cannot be undone. Its change orders and draws can be billed again and its receivable is removed.')}>
                   Void
                 </Button>
@@ -433,6 +456,11 @@ export default function InvoiceEditor({
                 </Button>
               )}
             </div>
+            {paidThroughPayments ? (
+              <p className="text-xs text-slate-400 mt-3">Paid through the payments recorded above. To reopen it, delete the payment that was recorded by mistake.</p>
+            ) : hasPayments && invoice.status !== 'Paid' ? (
+              <p className="text-xs text-slate-400 mt-3">It has payments recorded, so it cannot go back to Draft or be voided until they are deleted.</p>
+            ) : null}
             <p className="text-xs text-slate-400 mt-3">Marking it sent does not email anyone. Print it and send it yourself.</p>
           </Panel>
         )}
