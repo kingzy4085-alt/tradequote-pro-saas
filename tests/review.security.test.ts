@@ -389,10 +389,12 @@ describe('seams that hold: routes and the service role', () => {
       'lib/portal-server.ts',
       'lib/supabase/server.ts',
     ]);
-    // What that file may do with the service role: rate limits and the two portal functions. No table access.
+    // What that file may do with the service role: rate limits and the three portal functions. No table access.
     const portal = readFileSync('lib/portal-server.ts', 'utf8');
     expect(portal).not.toMatch(/\.from\(/);
-    expect([...portal.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['portal_decide', 'portal_view']);
+    expect([...portal.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['portal_decide', 'portal_notice', 'portal_view']);
+    // The email it sends afterwards holds no key of its own: its settings come from lib/automation.ts
+    expect(readFileSync('lib/portal-notify.ts', 'utf8')).not.toMatch(/createSupabase|SERVICE_ROLE|\.from\(|\.rpc\(/);
   });
 
   it('no browser component imports the server client or the automation jobs', () => {

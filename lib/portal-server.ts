@@ -1,8 +1,10 @@
 // The only place the client portal reaches the database. A visitor has no session and the
-// database runs nothing for the public key, so these two calls use the service role. They
-// can do exactly two things: read one shared proposal and record one answer to it, both by
-// the hash of the link's token. Keep it that way: nothing else belongs in this file.
+// database runs nothing for the public key, so these calls use the service role. They can do
+// exactly three things, all by the hash of the link's token: read one shared proposal, record
+// one answer to it, and read who to tell about that answer. Keep it that way: nothing else
+// belongs in this file.
 import { hashPortalToken, type PortalDecision, type PortalView } from './portal';
+import { notifyContractorOfAnswer, type PortalNotice } from './portal-notify';
 import { checkRateLimit, hashForLimit } from './rate-limit';
 import { createSupabaseAdminClient } from './supabase/server';
 
@@ -67,5 +69,10 @@ export async function answerPortal(token: string, decision: PortalDecision, ip: 
     console.error('Portal decision failed', error);
     return { ok: false, status: 500, error: 'Your answer could not be saved. Try again, or contact the company.' };
   }
+
+  // The answer is saved. Telling the contractor is best effort: a mail problem never fails the client.
+  const { data: notice, error: noticeError } = await admin.rpc('portal_notice', { p_token_hash: tokenHash });
+  if (noticeError) console.error('Portal notice could not be read', noticeError);
+  else if (notice) await notifyContractorOfAnswer(notice as PortalNotice);
   return { ok: true };
 }

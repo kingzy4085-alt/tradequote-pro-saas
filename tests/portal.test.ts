@@ -273,6 +273,38 @@ describe('the portal in the database', () => {
     await t.setLapsed(alpha, false);
   });
 
+  it('after an answer the server learns who to tell: the company address, else the owner', async () => {
+    const { hash } = await shared();
+    const notice = async () => (await t.asService<{ n: Record<string, any> | null }>('select public.portal_notice($1) as n', [hash]))[0].n;
+    expect(await notice()).toBeNull();
+    await accept(hash);
+    expect(await notice()).toMatchObject({ to: 'owner@alpha.ca', company: 'Alpha Electric', decision: 'accepted', signer_name: 'Dana Smith', client_name: 'Cargill', total_amount: 12500 });
+    expect(JSON.stringify(await notice())).not.toMatch(/INTERNAL|data:image|token/);
+
+    await t.as('ownerA', `update public.companies set email = 'Office@Alpha.ca' where id = $1`, [alpha]);
+    expect((await notice())!.to).toBe('Office@Alpha.ca');
+    // Turning off marketing emails does not stop this one; turning off alert emails does
+    await t.asSystem(`insert into public.email_unsubscribes (email, scope) values ('office@alpha.ca', 'marketing')`);
+    expect((await notice())!.to).toBe('Office@Alpha.ca');
+    await t.asSystem(`insert into public.email_unsubscribes (email, scope) values ('office@alpha.ca', 'alerts')`);
+    expect((await notice())!.to).toBeNull();
+    await t.as('ownerA', 'update public.companies set email = null where id = $1', [alpha]);
+  });
+
+  it('a declined proposal carries the reason to the contractor', async () => {
+    const { hash } = await shared();
+    await decide([hash, 'declined', null, null, 'Went with another bid', null, null]);
+    const [{ n }] = await t.asService<{ n: Record<string, any> }>('select public.portal_notice($1) as n', [hash]);
+    expect(n).toMatchObject({ decision: 'declined', decline_reason: 'Went with another bid', signer_name: null });
+  });
+
+  it('only the server can ask who to tell, and an unknown link tells it nothing', async () => {
+    const { hash } = await shared();
+    await accept(hash);
+    for (const who of [null, 'ownerA', 'ownerB'] as const) expect(await t.fails(who, 'select public.portal_notice($1)', [hash])).toMatch(/permission denied/);
+    expect((await t.asService<{ n: unknown }>('select public.portal_notice($1) as n', [hashPortalToken(newPortalToken())]))[0].n).toBeNull();
+  });
+
   it('deleting the proposal takes its links with it', async () => {
     const { id, hash } = await shared();
     await t.as('ownerA', `update public.proposals set status = 'Draft' where id = $1`, [id]);
