@@ -904,7 +904,8 @@ describe('upgrading a database with old rows', () => {
   it('running the migration a second time changes nothing and adds no alerts', async () => {
     const count = async () => (await up.asSystem<{ a: number; e: number; u: number; r: number }>(`select (select count(*)::int from public.alerts) a, (select count(*)::int from public.automation_events) e, (select count(*)::int from public.email_unsubscribes) u, (select count(*)::int from public.automation_rules) r`))[0];
     const before = await count();
-    await up.pg.exec(readMigration('20261104000210_automation.sql'));
+    // A re-deploy runs this migration and every one after it, in order: later ones add rules this one doesn't list
+    for (const file of migrationFiles().filter((f) => f >= '20261104000210_automation.sql')) await up.pg.exec(readMigration(file));
     expect(await count()).toEqual(before);
     expect(await upRun()).toEqual({ skipped: false, flips: 0, raised: 0, changed: 0, resolved: 0 });
   });
