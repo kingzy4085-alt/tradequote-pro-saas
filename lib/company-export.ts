@@ -32,6 +32,9 @@ const OTHER_SOURCES: ExportSource[] = [
   { table: 'proposal_shares', columns: '*', order: ['id'] },
   { table: 'assemblies', columns: '*', order: ['id'] },
   { table: 'assembly_lines', columns: '*', order: ['id'] },
+  { table: 'invoice_payments', columns: '*', order: ['id'] },
+  // The file list: names, sizes and where each is stored. The files themselves stay in storage.
+  { table: 'record_attachments', columns: '*', order: ['id'] },
   { table: 'job_cost_entries', columns: '*', order: ['id'] },
   { table: 'alerts', columns: '*', order: ['id'] },
   // Snoozes and dismissals: row security returns only the owner's own

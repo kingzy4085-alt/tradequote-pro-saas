@@ -60,6 +60,12 @@ Stack: Next.js 14.2 (App Router), Supabase (Postgres with row level security, Au
 - Industrial estimating: a non-productive time allowance (lockout/tagout, orientation, permits) as a percent of labour, and a permit and inspection line named for the company's province (TSASK in Saskatchewan), with the fee typed by the estimator.
 - Client portal: share a sent proposal by link; the client accepts with a signature or declines, no account. The contractor is emailed the answer, and the printed proposal carries the signature.
 - GST/HST number on the company profile and every printed letterhead. A banner while a payment is failing.
+- Partial payments on invoices (the invoice marks itself paid when they add up) and a CSV export of invoices and payments for the bookkeeper, on the Exports page.
+- The client portal shows each line at its sell price, with subtotal, tax and total. Cost and markup never leave the database.
+- File attachments on Drawings, Documents and Site Vault: drag and drop, up to 25 MB, private per company.
+- Company logo on printed documents; owner data export (one JSON file); closing the account, which cancels Stripe first.
+- An in-app alert for a week when a client answers a proposal. A support contact on help and error pages, and signed-in error reporting.
+- **Desktop app:** the "TradeQuote PRO" shortcut on the Desktop and in the Start menu starts Docker, the local database and the app, and opens it in its own window. Install or update with `pwsh scripts/install-desktop-app.ps1`.
 
 **Modules with their own purpose-built pages (14 of 45):** estimates, proposals, projects, change orders, invoices, progress billing draws, job costing, timecards, daily logs, LOTO permits, tailgate meetings, safety inspections, clients (profile page), crew schedule (calendar).
 
