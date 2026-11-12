@@ -534,3 +534,23 @@ export async function checkAutomationHealth(db: Db, settings: EmailSettings | nu
   }
   return { healthy: problems.length === 0, lastSuccessAt, problems, operatorEmailed };
 }
+
+// Evaluator for proposal_answered rule
+export async function evaluateProposalAnsweredAlerts(supabase: any, companyId: string) {
+  const { data: shares, error } = await supabase
+    .from('proposal_shares')
+    .select('id, proposal_id, proposals(title), updated_at, status')
+    .eq('company_id', companyId)
+    .in('status', ['accepted', 'declined', 'answered'])
+    .gte('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+
+  if (error || !shares) return [];
+
+  return shares.map((share: any) => ({
+    rule_key: 'proposal_answered',
+    entity_id: share.proposal_id,
+    title: Proposal Answered: ,
+    message: Client responded to proposal  ().,
+    link: /proposals/
+  }));
+}
