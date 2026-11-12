@@ -70,6 +70,9 @@ export default async function PortalPage({ params }: { params: { token: string }
   }
 
   const p = view.proposal;
+  // Built from an estimate: its lines at sell price and its totals, laid out as the printed proposal lays them out
+  const lines = view.lines ?? [];
+  const totals = view.totals;
   return (
     <Shell>
       {/* The client's own copy: the browser's print dialog saves it as a PDF. The answer form is left off the page. */}
@@ -85,6 +88,7 @@ export default async function PortalPage({ params }: { params: { token: string }
         <div>
           <p className={heading}>Prepared for</p>
           <p className="text-black font-semibold">{p.client_name || '—'}</p>
+          {p.client_address && <p className="break-words">{p.client_address}</p>}
         </div>
         <div>
           <p className={heading}>Project</p>
@@ -99,10 +103,50 @@ export default async function PortalPage({ params }: { params: { token: string }
         </section>
       )}
 
-      <section className="flex items-baseline justify-between gap-4 border-y-2 border-black py-4 mb-5">
-        <h2 className="text-sm font-bold uppercase text-black">Total price</h2>
-        <p className="text-2xl font-bold text-black">{p.total_amount === null ? 'To be confirmed' : formatMoney(p.total_amount)}</p>
-      </section>
+      {lines.length > 0 && (
+        <table className="w-full border-collapse mb-5">
+          <thead>
+            <tr className="border-b border-black text-left text-black text-xs uppercase">
+              <th scope="col" className="py-2">Description</th>
+              <th scope="col" className="py-2 pl-3 text-right">Qty</th>
+              <th scope="col" className="py-2 pl-3">Unit</th>
+              <th scope="col" className="py-2 pl-3 text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line, i) => (
+              <tr key={i} className="border-b border-gray-300 break-inside-avoid">
+                <td className="py-2 [overflow-wrap:anywhere]">{line.description}</td>
+                <td className="py-2 pl-3 text-right">{Number(line.quantity)}</td>
+                <td className="py-2 pl-3 [overflow-wrap:anywhere]">{line.unit}</td>
+                <td className="py-2 pl-3 text-right whitespace-nowrap">{formatMoney(line.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {totals ? (
+        <dl className="ml-auto w-full sm:w-64 space-y-1 mb-6 break-inside-avoid">
+          <div className="flex justify-between gap-4">
+            <dt>Subtotal</dt>
+            <dd>{formatMoney(totals.subtotal)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt>{`Tax (${Number(totals.tax_percentage) || 0}%)`}</dt>
+            <dd>{formatMoney(totals.tax)}</dd>
+          </div>
+          <div className="flex justify-between gap-4 text-black font-bold text-base border-t border-black pt-1">
+            <dt>Total (CAD)</dt>
+            <dd>{formatMoney(totals.total)}</dd>
+          </div>
+        </dl>
+      ) : (
+        <section className="flex items-baseline justify-between gap-4 border-y-2 border-black py-4 mb-5">
+          <h2 className="text-sm font-bold uppercase text-black">Total price</h2>
+          <p className="text-2xl font-bold text-black">{p.total_amount === null ? 'To be confirmed' : formatMoney(p.total_amount)}</p>
+        </section>
+      )}
 
       {p.terms && (
         <section className="pb-6">
