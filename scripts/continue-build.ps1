@@ -13,7 +13,7 @@
 # nothing else. If it reports that it was not allowed to run a command it needed, run again with
 # -Unattended. That switch removes every permission check, so only use it on this project folder.
 param(
-  [ValidateRange(1, 10)][int]$Tasks = 1,
+  [ValidateRange(1, 15)][int]$Tasks = 1,
   [switch]$Unattended,
   [switch]$SkipFirstCheck,
   [string]$Model = ''
@@ -46,7 +46,7 @@ if (-not $SkipFirstCheck) {
 $prompt = @'
 Read HANDOFF_PROMPT.md and STATUS.md in this folder and follow them exactly.
 
-Do ONE task: the first item under "Tasks, in order" in HANDOFF_PROMPT.md that is not marked [done].
+Do ONE task: the first item under "Tasks" in HANDOFF_PROMPT.md that is not marked [done] and not blocked on the owner.
 
 - Follow every rule in HANDOFF_PROMPT.md. Never delete or weaken a test to get it to pass.
 - Write tests for what you build. Run `npm test` and `npm run build`, and fix whatever fails.
