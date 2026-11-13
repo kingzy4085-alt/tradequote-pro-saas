@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@/lib/supabase-browser';
 
 export async function getMaterialPriceBook(companyId: string) {
   const supabase = createClient();
