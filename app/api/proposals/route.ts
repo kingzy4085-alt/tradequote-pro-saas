@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 const TABLE_NAME = 'proposals';
 
 export async function GET() {
+  if (!supabase) return NextResponse.json({ success: false, error: 'Database unavailable.' }, { status: 503 });
   try {
     const { data, error } = await supabase.from(TABLE_NAME).select('*');
     if (error) {
@@ -16,6 +17,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!supabase) return NextResponse.json({ success: false, error: 'Database unavailable.' }, { status: 503 });
   try {
     const body = await request.json();
     // Fill the original proposals columns from the form's fields

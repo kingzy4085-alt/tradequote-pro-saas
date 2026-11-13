@@ -2,8 +2,9 @@ import { supabase } from '@/lib/supabase';
 import { fail, isDate, ok, text } from '@/lib/api-helpers';
 import { RECORD_MODULES } from '@/lib/records';
 
-export async function GET(_request: Request, { params }: { params: { module: string } }) {
-  const m = RECORD_MODULES[params.module];
+export async function GET(_request: Request, { params }: { params: Promise<{ module: string }> }) {
+  const { module } = await params;
+  const m = RECORD_MODULES[module];
   if (!m) return fail('Unknown module.', 404);
   if (!supabase) return fail('Database unavailable.', 503);
   const { data, error } = await supabase
@@ -15,8 +16,9 @@ export async function GET(_request: Request, { params }: { params: { module: str
   return ok(data);
 }
 
-export async function POST(request: Request, { params }: { params: { module: string } }) {
-  const m = RECORD_MODULES[params.module];
+export async function POST(request: Request, { params }: { params: Promise<{ module: string }> }) {
+  const { module: moduleName } = await params;
+  const m = RECORD_MODULES[moduleName];
   if (!m) return fail('Unknown module.', 404);
   if (!supabase) return fail('Database unavailable.', 503);
   const body = await request.json().catch(() => ({}));

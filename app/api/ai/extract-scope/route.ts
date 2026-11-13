@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+function getGeminiClient() {
+  const key = (process.env.GEMINI_API_KEY ?? '').trim();
+  return key ? new GoogleGenerativeAI(key) : null;
+}
 
 export async function POST(request: Request) {
   try {
@@ -16,6 +19,10 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer);
     const base64Data = buffer.toString('base64');
 
+    const genAI = getGeminiClient();
+    if (!genAI) {
+      return NextResponse.json({ success: false, error: 'AI extraction is not configured' }, { status: 503 });
+    }
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
     const prompt = `Analyze the following scope document and extract:
@@ -42,7 +49,7 @@ Return ONLY a JSON object with this structure:
     ]);
 
     const responseText = result.response.text();
-    const jsonMatch = responseText.match(/\{.*\}/s);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     
     if (!jsonMatch) {
       throw new Error("Failed to parse AI response as JSON");

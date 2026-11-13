@@ -35,6 +35,8 @@ export async function uploadPhotos(files: FileList, folder: string, onEach?: () 
 }
 
 export async function signedPhotoUrls(paths: string[]) {
-  const { data } = await supabaseBrowser().storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600);
-  return Object.fromEntries((data || []).filter((d) => d.signedUrl).map((d) => [d.path!, d.signedUrl]));
+  const sb = supabaseBrowser();
+  if (!sb) return {};
+  const { data } = await sb.storage.from(PHOTO_BUCKET).createSignedUrls(paths, 3600);
+  return Object.fromEntries((data || []).filter((d: { path?: string; signedUrl?: string }) => d.signedUrl).map((d: { path?: string; signedUrl?: string }) => [d.path!, d.signedUrl]));
 }

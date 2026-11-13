@@ -62,8 +62,10 @@ export default function DailyLogPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     const missing = (log?.photos || []).filter((p) => !urls[p]);
     if (!missing.length) return;
-    supabaseBrowser().storage.from(BUCKET).createSignedUrls(missing, 3600).then(({ data }) => {
-      if (data) setUrls((u) => ({ ...u, ...Object.fromEntries(data.filter((item) => Boolean(item.path && item.signedUrl)).map((item) => [item.path as string, item.signedUrl as string])) }));
+    const sb = supabaseBrowser();
+    if (!sb) return;
+    sb.storage.from(BUCKET).createSignedUrls(missing, 3600).then(({ data }: { data: Array<{ path?: string; signedUrl?: string }> | null }) => {
+      if (data) setUrls((u) => ({ ...u, ...Object.fromEntries(data.filter((item: { path?: string; signedUrl?: string }) => Boolean(item.path && item.signedUrl)).map((item: { path?: string; signedUrl?: string }) => [item.path as string, item.signedUrl as string])) }));
     });
   }, [log?.photos, urls]);
 
@@ -118,7 +120,8 @@ export default function DailyLogPage({ params }: { params: Promise<{ id: string 
   async function removePhoto(path: string) {
     if (!confirm('Remove this photo?')) return;
     if (await send({ photos: log!.photos.filter((p) => p !== path) }, 'Photo removed')) {
-      await supabaseBrowser().storage.from(BUCKET).remove([path]);
+      const sb = supabaseBrowser();
+      if (sb) await sb.storage.from(BUCKET).remove([path]);
     }
   }
 

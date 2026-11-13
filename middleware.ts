@@ -4,10 +4,27 @@ import { MODULE_PLAN, PLAN_RANK, moduleOf } from '@/lib/plans';
 
 const PUBLIC = ['/pricing', '/terms', '/privacy', '/login', '/signup', '/api/leads', '/api/stripe/webhook'];
 
-// Keeps the Supabase session fresh, sends signed-out visitors to /login and new accounts to /onboarding.
+export async function middleware(req: NextRequest) {
+  try {
+    return await proxy(req);
+  } catch (e) {
+    console.error("Middleware crash:", e);
+    return NextResponse.next();
+  }
+}
+
 export async function proxy(req: NextRequest) {
   let res = NextResponse.next({ request: req });
-  const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase env vars missing");
+    return res;
+  }
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll: () => req.cookies.getAll(),
       setAll: (list) => {
@@ -42,10 +59,10 @@ export async function proxy(req: NextRequest) {
     return redirect('/onboarding');
   }
 
-  // Plans: the free trial unlocks everything; after it, each plan unlocks its modules
   const needs = MODULE_PLAN[moduleOf(path)];
   const always = ALWAYS_OPEN.some((p) => path === p || path.startsWith(p + '/'));
   if (always) return res;
+  
   const { data: c } = await supabase.from('companies').select('subscription_plan, subscription_status, trial_ends_at').eq('id', companyId).maybeSingle();
   const paying = ['active', 'trialing', 'past_due'].includes(c?.subscription_status);
   const inTrial = !paying && !!c?.trial_ends_at && new Date(c.trial_ends_at) > new Date();
@@ -60,10 +77,8 @@ export async function proxy(req: NextRequest) {
   return res;
 }
 
-// Reachable with an expired trial so the company can pay or manage its account
 const ALWAYS_OPEN = ['/billing', '/settings', '/help', '/about', '/api/stripe', '/api/company', '/api/health'];
 
 export const config = {
-  // Everything except the files a phone needs to install the app
   matcher: ['/((?!_next/static|_next/image|manifest.webmanifest|sw.js|icons/|icon.png|apple-icon.png|favicon.ico).*)'],
 };
