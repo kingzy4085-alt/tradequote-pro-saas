@@ -5,11 +5,12 @@ import { TIMECARD_COLS, costOf, parseEntry } from '@/lib/timecards';
 const notFound = () => fail('Timecard not found.', 404);
 
 // Edit a submitted entry, or approve / unapprove it. Approved entries are locked.
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
+  if (!isUuid(id)) return notFound();
   const body = await request.json().catch(() => ({}));
-  const cur = await supabase.from('timecards').select(TIMECARD_COLS).eq('id', params.id).maybeSingle();
+  const cur = await supabase.from('timecards').select(TIMECARD_COLS).eq('id', id).maybeSingle();
   if (cur.error) return fail(cur.error.message);
   if (!cur.data) return notFound();
 
@@ -27,19 +28,20 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (!p.row) return fail(p.error!, 400);
     row = { ...p.row, total_cost: await costOf(p.row.regular_hours, p.row.overtime_hours, p.row.hourly_cost) };
   }
-  const { data, error } = await supabase.from('timecards').update(row).eq('id', params.id).select(TIMECARD_COLS).maybeSingle();
+  const { data, error } = await supabase.from('timecards').update(row).eq('id', id).select(TIMECARD_COLS).maybeSingle();
   if (error) return fail(error.message);
   if (!data) return notFound();
   return ok(data);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
-  const cur = await supabase.from('timecards').select('status').eq('id', params.id).maybeSingle();
+  if (!isUuid(id)) return notFound();
+  const cur = await supabase.from('timecards').select('status').eq('id', id).maybeSingle();
   if (!cur.data) return notFound();
   if (cur.data.status === 'Approved') return fail('Approved timecards can\'t be deleted. Unapprove it first.', 409);
-  const { error } = await supabase.from('timecards').delete().eq('id', params.id);
+  const { error } = await supabase.from('timecards').delete().eq('id', id);
   if (error) return fail(error.message);
   return ok(null);
 }

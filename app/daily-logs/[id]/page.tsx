@@ -40,8 +40,8 @@ async function compress(file: File): Promise<Blob> {
   }
 }
 
-export default function DailyLogPage({ params }: { params: { id: string } }) {
-  const { id } = React.use(params);
+export default function DailyLogPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params) as { id: string };
   const [log, setLog] = useState<Log | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -52,7 +52,7 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
   const [signature, setSignature] = useState('');
 
   useEffect(() => {
-    fetch(`/api/daily-logs/${params.id}`)
+    fetch(`/api/daily-logs/${id}`)
       .then((r) => r.json())
       .then((j) => (j.success ? setLog({ ...j.data, photos: j.data.photos || [] }) : setError(j.error)))
       .catch(() => setError('Could not load this log.'));
@@ -63,7 +63,7 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
     const missing = (log?.photos || []).filter((p) => !urls[p]);
     if (!missing.length) return;
     supabaseBrowser().storage.from(BUCKET).createSignedUrls(missing, 3600).then(({ data }) => {
-      if (data) setUrls((u) => ({ ...u, ...Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path!, d.signedUrl])) }));
+      if (data) setUrls((u) => ({ ...u, ...Object.fromEntries(data.filter((item) => Boolean(item.path && item.signedUrl)).map((item) => [item.path as string, item.signedUrl as string])) }));
     });
   }, [log?.photos, urls]);
 
@@ -82,7 +82,7 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
 
   async function send(body: Record<string, unknown>, okMessage: string) {
     setStatus('Saving…');
-    const res = await fetch(`/api/daily-logs/${params.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const res = await fetch(`/api/daily-logs/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then((r) => r.json()).catch(() => ({ success: false, error: 'Network error' }));
     if (!res.success) { setStatus(`Not saved: ${res.error}`); return false; }
     setLog({ ...res.data, photos: res.data.photos || [] });
@@ -241,7 +241,7 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
           <button
             onClick={async () => {
               if (!confirm('Delete this log and its photos? This cannot be undone.')) return;
-              const r = await fetch(`/api/daily-logs/${params.id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => ({ success: false }));
+              const r = await fetch(`/api/daily-logs/${id}`, { method: 'DELETE' }).then((x) => x.json()).catch(() => ({ success: false }));
               if (r.success) { setDirty(false); window.location.href = '/daily-logs'; } else setStatus(`Not deleted: ${r.error || 'Network error'}`);
             }}
             className="print:hidden text-sm text-slate-400 hover:text-red-400"

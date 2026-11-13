@@ -17,21 +17,23 @@ function amount(v: unknown) {
 }
 
 // One estimate with its line items
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return unavailable();
-  if (!validId(params.id)) return notFound();
-  const { data, error } = await supabase.from('estimates').select('*').eq('id', params.id).maybeSingle();
+  if (!validId(id)) return notFound();
+  const { data, error } = await supabase.from('estimates').select('*').eq('id', id).maybeSingle();
   if (error) return fail(error.message);
   if (!data) return notFound();
-  const items = await supabase.from('estimate_items').select('*').eq('estimate_id', params.id).order('sort');
+  const items = await supabase.from('estimate_items').select('*').eq('estimate_id', id).order('sort');
   if (items.error) return fail(items.error.message);
   return NextResponse.json({ success: true, data: { ...data, items: items.data } });
 }
 
 // Saves the estimate fields and line items, and stores the computed totals for the estimate list
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return unavailable();
-  if (!validId(params.id)) return notFound();
+  if (!validId(id)) return notFound();
   const body = await request.json().catch(() => ({}));
 
   const row: Record<string, unknown> = {};
@@ -44,7 +46,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     row[f] = n;
   }
 
-  const current = await supabase.from('estimates').select('*').eq('id', params.id).maybeSingle();
+  const current = await supabase.from('estimates').select('*').eq('id', id).maybeSingle();
   if (current.error) return fail(current.error.message);
   if (!current.data) return notFound();
 
@@ -56,7 +58,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       const quantity = amount(it.quantity), material = amount(it.material_unit_cost), hours = amount(it.labour_hours_per_unit);
       if (quantity === null || material === null || hours === null) return fail(`Line ${i + 1}: quantity, material cost and labour hours must be numbers of 0 or more.`, 400);
       items.push({
-        estimate_id: params.id,
+        estimate_id: id,
         sort: i,
         description: String(it.description ?? '').slice(0, 500),
         unit: String(it.unit ?? '').slice(0, 20),
@@ -68,13 +70,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 
   const merged = { ...current.data, ...row };
-  const lines = items ?? (await supabase.from('estimate_items').select('*').eq('estimate_id', params.id)).data ?? [];
+  const lines = items ?? (await supabase.from('estimate_items').select('*').eq('estimate_id', id)).data ?? [];
   const t = estimateTotals(lines, merged.labourRate, merged.markupPercentage, merged.taxPercentage);
   Object.assign(row, { total_material_cost: t.material, estimated_labor_hours: t.labourHours, estimated_labor_cost: t.labour, total_bid: t.total });
 
   if (items) {
     // Add the new lines before removing the old ones so a failed save never empties the estimate
-    const old = await supabase.from('estimate_items').select('id').eq('estimate_id', params.id);
+    const old = await supabase.from('estimate_items').select('id').eq('estimate_id', id);
     if (old.error) return fail(old.error.message);
     if (items.length) {
       const ins = await supabase.from('estimate_items').insert(items);
@@ -87,17 +89,18 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
   }
 
-  const { data, error } = await supabase.from('estimates').update(row).eq('id', params.id).select().maybeSingle();
+  const { data, error } = await supabase.from('estimates').update(row).eq('id', id).select().maybeSingle();
   if (error) return fail(error.message);
   return NextResponse.json({ success: true, data: { ...data, totals: t } });
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return unavailable();
-  if (!validId(params.id)) return notFound();
-  const { data, error } = await supabase.from('estimates').delete().eq('id', params.id).select('id');
+  if (!validId(id)) return notFound();
+  const { data, error } = await supabase.from('estimates').delete().eq('id', id).select('id');
   if (error) return fail(error.message);
   if (!data.length) return notFound();
-  await supabase.from('estimate_items').delete().eq('estimate_id', params.id);
+  await supabase.from('estimate_items').delete().eq('estimate_id', id);
   return NextResponse.json({ success: true });
 }

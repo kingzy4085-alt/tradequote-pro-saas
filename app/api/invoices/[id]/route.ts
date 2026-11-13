@@ -28,25 +28,27 @@ async function billedPercents(exceptId: string) {
 }
 
 // Invoice plus what can still be billed: approved, un-invoiced change orders and estimates with their billed-to-date %
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
-  const { data, error } = await supabase.from('invoices').select('*').eq('id', params.id).maybeSingle();
+  if (!isUuid(id)) return notFound();
+  const { data, error } = await supabase.from('invoices').select('*').eq('id', id).maybeSingle();
   if (error) return fail(error.message);
   if (!data) return notFound();
   const [cos, ests, billed] = await Promise.all([
-    supabase.from('change-orders').select('id, co_number, project, scope, price, invoice_id').eq('status', 'Approved').or(`invoice_id.is.null,invoice_id.eq.${params.id}`).order('co_number'),
+    supabase.from('change-orders').select('id, co_number, project, scope, price, invoice_id').eq('status', 'Approved').or(`invoice_id.is.null,invoice_id.eq.${id}`).order('co_number'),
     supabase.from('estimates').select('id, "projectName", "clientName", status, total_bid').order('id', { ascending: false }).limit(200),
-    billedPercents(params.id),
+    billedPercents(id),
   ]);
   return ok({ ...data, available_change_orders: cos.data || [], estimates: ests.data || [], billed_percent: billed });
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
+  if (!isUuid(id)) return notFound();
   const body = await request.json().catch(() => ({}));
-  const cur = await supabase.from('invoices').select('*').eq('id', params.id).maybeSingle();
+  const cur = await supabase.from('invoices').select('*').eq('id', id).maybeSingle();
   if (cur.error) return fail(cur.error.message);
   if (!cur.data) return notFound();
   const inv = cur.data;
@@ -78,7 +80,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   let coIds: string[] | null = null;
   if ('lines' in body) {
     if (!Array.isArray(body.lines) || body.lines.length > 200) return fail('Invalid invoice lines.', 400);
-    const billed = await billedPercents(params.id);
+    const billed = await billedPercents(id);
     const lines: InvoiceLine[] = [];
     coIds = [];
     for (const [i, l] of (body.lines as InvoiceLine[]).entries()) {
@@ -87,7 +89,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
         if (!isUuid(String(l.change_order_id))) return fail(`Line ${i + 1}: unknown change order.`, 400);
         const co = await supabase.from('change-orders').select('id, co_number, scope, project, price, status, invoice_id').eq('id', l.change_order_id).maybeSingle();
         if (!co.data || co.data.status !== 'Approved') return fail(`Line ${i + 1}: change order is not approved.`, 400);
-        if (co.data.invoice_id && co.data.invoice_id !== params.id) return fail(`Line ${i + 1}: CO #${co.data.co_number} is already on another invoice.`, 409);
+        if (co.data.invoice_id && co.data.invoice_id !== id) return fail(`Line ${i + 1}: CO #${co.data.co_number} is already on another invoice.`, 409);
         coIds.push(co.data.id);
         lines.push({ description: text(l.description, 500) || `Change order #${co.data.co_number}`, amount: Number(co.data.price), change_order_id: co.data.id });
       } else if (l.estimate_id != null && l.estimate_id !== '') {
@@ -119,30 +121,31 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   const merged = { ...inv, ...row };
   Object.assign(row, invoiceTotals(merged.lines || [], merged.tax_pct, merged.holdback_pct));
 
-  const { data, error } = await supabase.from('invoices').update(row).eq('id', params.id).select().maybeSingle();
+  const { data, error } = await supabase.from('invoices').update(row).eq('id', id).select().maybeSingle();
   if (error) return fail(error.message);
 
   if (coIds) {
     // Link billed change orders to this invoice and release any that were removed from it
-    const rel = supabase.from('change-orders').update({ invoice_id: null }).eq('invoice_id', params.id);
+    const rel = supabase.from('change-orders').update({ invoice_id: null }).eq('invoice_id', id);
     const released = coIds.length ? await rel.not('id', 'in', `(${coIds.join(',')})`) : await rel;
     if (released.error) return fail(released.error.message);
     if (coIds.length) {
-      const linked = await supabase.from('change-orders').update({ invoice_id: params.id }).in('id', coIds);
+      const linked = await supabase.from('change-orders').update({ invoice_id: id }).in('id', coIds);
       if (linked.error) return fail(linked.error.message);
     }
   }
   return ok(data);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
-  const cur = await supabase.from('invoices').select('status').eq('id', params.id).maybeSingle();
+  if (!isUuid(id)) return notFound();
+  const cur = await supabase.from('invoices').select('status').eq('id', id).maybeSingle();
   if (!cur.data) return notFound();
   if (cur.data.status !== 'Draft') return fail('Only draft invoices can be deleted.', 409);
-  await supabase.from('change-orders').update({ invoice_id: null }).eq('invoice_id', params.id);
-  const { error } = await supabase.from('invoices').delete().eq('id', params.id);
+  await supabase.from('change-orders').update({ invoice_id: null }).eq('invoice_id', id);
+  const { error } = await supabase.from('invoices').delete().eq('id', id);
   if (error) return fail(error.message);
   return ok(null);
 }

@@ -106,8 +106,8 @@ export function RecordDetail({ module, id }: { module: string; id: string }) {
   }, [module, id]);
 
   useEffect(() => {
-    const missing = (rec?.photos || []).filter((p) => !urls[p]);
-    if (missing.length) signedPhotoUrls(missing).then((u) => setUrls((x) => ({ ...x, ...u })));
+    const missing = (rec?.photos || []).filter((p): p is string => !!p && !urls[p]);
+    if (missing.length) signedPhotoUrls(missing).then((u) => setUrls((x) => ({ ...x, ...(Object.fromEntries(Object.entries(u).filter(([, v]) => typeof v === "string")) as Record<string, string>) })));
   }, [rec?.photos, urls]);
 
   useEffect(() => {

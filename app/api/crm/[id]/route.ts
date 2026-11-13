@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   try {
     const { id } = params;
     if (!supabase) {
@@ -13,11 +14,12 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
     return NextResponse.json({ success: true, data }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ success: true, data: { id: params.id } }, { status: 200 });
+    return NextResponse.json({ success: true, data: { id: id } }, { status: 200 });
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   try {
     const { id } = params;
     const body = await request.json().catch(() => ({}));
@@ -30,11 +32,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
     return NextResponse.json({ success: true, data: data?.[0] || body }, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json({ success: true, data: { id: params.id, ...body } }, { status: 200 });
+    return NextResponse.json({ success: true, data: { id: id, ...body } }, { status: 200 });
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   try {
     const { id } = params;
     if (!supabase) {

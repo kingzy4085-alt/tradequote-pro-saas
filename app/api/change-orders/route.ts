@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     supabase.rpc('current_company_id').then(({ data: id }) => supabase!.from('companies').select('default_markup, default_tax, default_labour_rate').eq('id', id).maybeSingle()),
   ]);
   if (last.error) return fail(last.error.message);
-  const c = company.data || {};
+  const c: Record<string, any> = company.data || {};
   const row = {
     project,
     name: project,

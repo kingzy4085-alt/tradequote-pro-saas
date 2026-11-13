@@ -6,10 +6,11 @@ const TEXT = ['project', 'client_name', 'reason', 'scope'];
 const NUMBERS = ['material_cost', 'labour_hours', 'labour_rate', 'markup_pct', 'tax_pct'];
 const notFound = () => fail('Change order not found.', 404);
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
-  const { data, error } = await supabase.from('change-orders').select('*').eq('id', params.id).maybeSingle();
+  if (!isUuid(id)) return notFound();
+  const { data, error } = await supabase.from('change-orders').select('*').eq('id', id).maybeSingle();
   if (error) return fail(error.message);
   if (!data) return notFound();
   return ok(data);
@@ -17,11 +18,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
 // Edits a Draft/Sent change order, or moves it through Sent → Approved (client signature) / Rejected.
 // Approved change orders are locked; reopening is only possible before they are invoiced.
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
+  if (!isUuid(id)) return notFound();
   const body = await request.json().catch(() => ({}));
-  const cur = await supabase.from('change-orders').select('*').eq('id', params.id).maybeSingle();
+  const cur = await supabase.from('change-orders').select('*').eq('id', id).maybeSingle();
   if (cur.error) return fail(cur.error.message);
   if (!cur.data) return notFound();
   const co = cur.data;
@@ -57,18 +59,19 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
   }
 
-  const { data, error } = await supabase.from('change-orders').update(row).eq('id', params.id).select().maybeSingle();
+  const { data, error } = await supabase.from('change-orders').update(row).eq('id', id).select().maybeSingle();
   if (error) return fail(error.message);
   return ok(data);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!isUuid(params.id)) return notFound();
-  const cur = await supabase.from('change-orders').select('status, invoice_id').eq('id', params.id).maybeSingle();
+  if (!isUuid(id)) return notFound();
+  const cur = await supabase.from('change-orders').select('status, invoice_id').eq('id', id).maybeSingle();
   if (!cur.data) return notFound();
   if (cur.data.status === 'Approved') return fail('Approved change orders can\'t be deleted. Reopen it first.', 409);
-  const { error } = await supabase.from('change-orders').delete().eq('id', params.id);
+  const { error } = await supabase.from('change-orders').delete().eq('id', id);
   if (error) return fail(error.message);
   return ok(null);
 }

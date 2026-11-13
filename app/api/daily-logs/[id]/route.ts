@@ -6,10 +6,11 @@ const fail = (message: string, status = 500) => NextResponse.json({ success: fal
 const notFound = () => fail('Log not found.', 404);
 const validId = (id: string) => /^[0-9a-f-]{36}$/i.test(id) || /^\d+$/.test(id);
 
-export async function GET(_request: Request, { params }: { params: { id: string } }) {
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!validId(params.id)) return notFound();
-  const { data, error } = await supabase.from('daily-logs').select('*').eq('id', params.id).maybeSingle();
+  if (!validId(id)) return notFound();
+  const { data, error } = await supabase.from('daily-logs').select('*').eq('id', id).maybeSingle();
   if (error) return fail(error.message);
   if (!data) return notFound();
   return NextResponse.json({ success: true, data });
@@ -17,11 +18,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
 // Saves log details, photos, and signs or reopens the log.
 // A signed log can't be edited; reopening it clears the signature.
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!validId(params.id)) return notFound();
+  if (!validId(id)) return notFound();
   const body = await request.json().catch(() => ({}));
-  const current = await supabase.from('daily-logs').select('id, signed_at, company_id').eq('id', params.id).maybeSingle();
+  const current = await supabase.from('daily-logs').select('id, signed_at, company_id').eq('id', id).maybeSingle();
   if (current.error) return fail(current.error.message);
   if (!current.data) return notFound();
 
@@ -58,15 +60,16 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     }
   }
 
-  const { data, error } = await supabase.from('daily-logs').update(row).eq('id', params.id).select().maybeSingle();
+  const { data, error } = await supabase.from('daily-logs').update(row).eq('id', id).select().maybeSingle();
   if (error) return fail(error.message);
   return NextResponse.json({ success: true, data });
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   if (!supabase) return fail('Database unavailable.', 503);
-  if (!validId(params.id)) return notFound();
-  const { data, error } = await supabase.from('daily-logs').delete().eq('id', params.id).select('photos');
+  if (!validId(id)) return notFound();
+  const { data, error } = await supabase.from('daily-logs').delete().eq('id', id).select('photos');
   if (error) return fail(error.message);
   if (!data.length) return notFound();
   const photos = (data[0].photos as string[]) || [];

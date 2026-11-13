@@ -8,8 +8,8 @@ async function sync(subscriptionId: string, companyHint?: string | null) {
   const sub = await stripe!.subscriptions.retrieve(subscriptionId);
   const companyId = sub.metadata.company_id || companyHint;
   if (!companyId) return;
-  const tier = TIERS.find((t) => t === sub.metadata.tier) || (sub.items.data[0]?.price.lookup_key || '').split('_')[1] || 'free';
-  const periodEnd = (sub as any).current_period_end ?? sub.items.data[0]?.current_period_end;
+  const tier = TIERS.find((t) => t === sub.metadata.tier) || ((sub.items.data[0] as any)?.price.lookup_key || '').split('_')[1] || 'free';
+  const periodEnd = (sub as any).current_period_end ?? (sub.items.data[0] as any)?.current_period_end;
   const { error } = await supabaseAdmin!
     .from('companies')
     .update({
