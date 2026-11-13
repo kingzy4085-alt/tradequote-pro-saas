@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { sendSMSNotification } from '@/lib/notifications/sms';
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const { phone } = await req.json();
-  const proposalId = params.id;
-  const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/portal/proposals/${proposalId}`;
+  const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/portal/proposals/${id}`;
 
   const result = await sendSMSNotification({
     to: phone,
