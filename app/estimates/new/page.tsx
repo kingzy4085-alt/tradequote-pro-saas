@@ -7,9 +7,23 @@ import SavedAssembliesLibrary, { Assembly } from '@/components/estimates/saved-a
 export default function NewEstimatePage() {
   const [aiData, setAiData] = useState<{ estimatedLabor: number; estimatedMaterials: number; description: string } | null>(null);
   const [quoteItems, setQuoteItems] = useState<Assembly[]>([]);
+  const [clientName, setClientName] = useState('');
 
   const handleAddAssembly = (assembly: Assembly) => {
     setQuoteItems([...quoteItems, { ...assembly, id: crypto.randomUUID() }]);
+  };
+
+  const applyAiDataToEstimate = () => {
+    if (!aiData) return;
+    handleAddAssembly({
+      id: crypto.randomUUID(),
+      name: 'AI Generated Scope',
+      description: aiData.description,
+      laborHours: aiData.estimatedLabor,
+      materialCost: aiData.estimatedMaterials,
+      category: 'General'
+    });
+    setAiData(null);
   };
 
   const handleRemoveItem = (idToRemove: string) => {
@@ -23,15 +37,19 @@ export default function NewEstimatePage() {
   const grossTotal = (totalLabor * LABOR_RATE) + totalMaterial;
 
   const handleSave = async () => {
+    if (!clientName.trim()) {
+      alert("Please enter a client name.");
+      return;
+    }
     try {
       const res = await fetch("/api/proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          project_name: "New Estimate",
-          client_name: "New Client",
+          project_name: "New Estimate for " + clientName,
+          client_name: clientName,
           amount: grossTotal,
-          scope_details: "Generated via AI",
+          scope_details: quoteItems.map(i => i.name).join(', '),
           status: "Draft"
         })
       });
@@ -54,6 +72,17 @@ export default function NewEstimatePage() {
           <span className="text-sm text-slate-400">Draft Status</span>
         </div>
         
+        <div className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800">
+          <label className="block text-sm font-medium text-slate-400 mb-2">Client Name</label>
+          <input 
+            type="text" 
+            value={clientName} 
+            onChange={(e) => setClientName(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-700 p-2 rounded text-slate-200"
+            placeholder="Enter client name..."
+          />
+        </div>
+
         <div className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 min-h-[500px]">
           <h2 className="text-lg font-semibold mb-4 border-b border-slate-800 pb-2 text-white">Line Items</h2>
           
@@ -99,9 +128,17 @@ export default function NewEstimatePage() {
           <div className="bg-emerald-900/20 border border-emerald-800 p-4 rounded-lg">
             <h4 className="text-emerald-400 font-semibold text-sm">AI Analysis Result</h4>
             <p className="text-emerald-200/80 text-sm mt-1">{aiData.description}</p>
-            <div className="flex gap-4 mt-2 text-xs text-emerald-300">
-                <span>{aiData.estimatedLabor} labor hrs</span>
-                <span>${aiData.estimatedMaterials} mat.</span>
+            <div className="flex gap-4 mt-2 text-xs text-emerald-300 items-center justify-between">
+                <div className="flex gap-4">
+                  <span>{aiData.estimatedLabor} labor hrs</span>
+                  <span>${aiData.estimatedMaterials} mat.</span>
+                </div>
+                <button 
+                  onClick={applyAiDataToEstimate}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-semibold"
+                >
+                  Apply to Estimate
+                </button>
             </div>
           </div>
         )}
