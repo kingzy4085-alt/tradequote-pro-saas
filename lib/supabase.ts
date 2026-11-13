@@ -1,43 +1,40 @@
-import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export async function createClient() {
+  const cookieStore = await cookies();
 
-// Signed-in user's client for the current request; database row security limits it to their company.
-export function createUserClient() {
-  const store = cookies();
-  return createServerClient(supabaseUrl!, anonKey!, {
-    cookies: {
-      getAll: () => store.getAll(),
-      setAll: (list) => {
-        try {
-          list.forEach(({ name, value, options }) => store.set(name, value, options));
-        } catch {
-          // Server components can't set cookies; middleware refreshes the session instead
-        }
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {}
+        },
       },
-    },
-  });
+    }
+  );
 }
 
-// API routes call supabase.from(...); each call uses the requesting user's session.
-export const supabase =
-  supabaseUrl && anonKey
-    ? {
-        from: (table: string) => createUserClient().from(table),
-        rpc: (fn: string, args?: Record<string, unknown>) => createUserClient().rpc(fn, args),
-        get auth() {
-          return createUserClient().auth;
-        },
-        get storage() {
-          return createUserClient().storage;
-        },
-      }
-    : null;
+// Admin client bypassing RLS for webhooks and background jobs
+export const supabaseAdmin = createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      persistSession: false,
+    },
+  }
+);
 
-// Full-access client: only for the public founding-list signup.
-export const supabaseAdmin =
-  supabaseUrl && serviceKey ? createClient(supabaseUrl, serviceKey) : null;
+// Standard client alias for modules importing { supabase }
+export const supabase = supabaseAdmin;

@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 
 import { useEffect, useState } from 'react';
 import { supabaseBrowser } from '@/lib/supabase-browser';
@@ -252,4 +253,5 @@ export default function DailyLogPage({ params }: { params: { id: string } }) {
     </main>
   );
 }
+
 

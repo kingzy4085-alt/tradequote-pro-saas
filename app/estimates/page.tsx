@@ -1,203 +1,159 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { money } from '@/lib/estimate-math';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-interface Estimate {
-  id: string;
-  projectName: string;
-  clientName: string;
-  markupPercentage: number;
-  total_bid: number | null;
-  status: string | null;
-  created_at: string;
-}
+export default function EstimatesHubPage() {
+  const router = useRouter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [projectName, setProjectName] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [markupPct, setMarkupPct] = useState("25");
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-export default function EstimatesPage() {
-  const [estimates, setEstimates] = useState<Estimate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [projectName, setProjectName] = useState('');
-  const [clientName, setClientName] = useState('');
-  const [markupPercentage, setMarkupPercentage] = useState('15');
-  const [companyDefaults, setCompanyDefaults] = useState<any>({});
-  const [error, setError] = useState('');
+  const handleSaveEstimate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg("");
 
-  const fetchEstimates = async () => {
     try {
-      const res = await fetch('/api/estimates');
-      const json = await res.json();
-      if (json.success) {
-        setEstimates(json.data || []);
+      const response = await fetch("/api/estimates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: projectName,
+          client_name: clientName,
+          markup_pct: Number(markupPct),
+          status: "Draft",
+          created_at: new Date().toISOString()
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to save estimate to database.");
       }
-    } catch (err) {
-      console.error('Failed to fetch estimates', err);
+
+      router.push("/estimates/new");
+    } catch (err: any) {
+      console.error("Failed to save estimate", err);
+      setErrorMsg(err.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchEstimates();
-    // Start new estimates from the default markup saved in Settings
-    fetch('/api/company').then((r) => r.json()).then((j) => {
-      if (j.data) setCompanyDefaults(j.data);
-      if (j.data?.default_markup != null) setMarkupPercentage(String(j.data.default_markup));
-    }).catch(() => {});
-  }, []);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await fetch('/api/estimates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectName,
-          clientName,
-          markupPercentage: Number(markupPercentage),
-          taxPercentage: Number(companyDefaults.default_tax ?? 5),
-          labourRate: Number(companyDefaults.default_labour_rate ?? 0),
-        }),
-      });
-      const json = await res.json();
-      if (json.success) window.location.href = `/estimates/${json.data.id}`;
-      else setError(json.error || 'Could not save the estimate.');
-    } catch (err) {
-      console.error('Failed to create estimate', err);
-    }
-  };
-
-  const filteredEstimates = estimates.filter(est => 
-    est.projectName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    est.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      <div className="max-w-7xl mx-auto">
+    <main className="min-h-screen bg-slate-950 p-6 lg:p-12 text-slate-100">
+      <div className="max-w-7xl mx-auto space-y-8">
+        
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Estimates & Bidding</h1>
-            <p className="text-slate-400 mt-1">Manage industrial shutdowns, electrical projects, and client bids.</p>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Estimates & Bidding Hub</h1>
+            <p className="text-slate-400 text-sm mt-1">Manage industrial shutdowns, plant maintenance, and contractor proposals.</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2.5 rounded-lg shadow transition-colors flex items-center gap-2"
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2.5 rounded-lg text-sm transition-all shadow-lg flex items-center gap-2"
           >
             + New Estimate
           </button>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search estimates by project or client..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:w-96 bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
-          />
+        {/* Empty State / Grid */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center space-y-4">
+          <h3 className="text-lg font-semibold text-slate-200">Industrial Estimating Pipeline</h3>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            Create high-precision industrial shutdown or motor hookup estimates linked directly to your Supabase CRM.
+          </p>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold px-6 py-2 rounded-lg text-sm transition-all"
+          >
+            Launch Estimating Engine
+          </button>
         </div>
 
-        {/* Data Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
-                  <th className="p-4">Project Name</th>
-                  <th className="p-4">Client</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Total</th>
-                  <th className="p-4">Created Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">Loading estimates...</td>
-                  </tr>
-                ) : filteredEstimates.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-slate-500">No estimates found. Create your first one above!</td>
-                  </tr>
-                ) : (
-                  filteredEstimates.map((est) => (
-                    <tr key={est.id} onClick={() => (window.location.href = `/estimates/${est.id}`)} className="hover:bg-slate-800/50 transition-colors cursor-pointer">
-                      <td className="p-4 font-medium text-white"><a href={`/estimates/${est.id}`}>{est.projectName || 'Untitled Project'}</a></td>
-                      <td className="p-4 text-slate-300">{est.clientName || 'N/A'}</td>
-                      <td className="p-4 text-slate-300">{est.status || 'Draft'}</td>
-                      <td className="p-4 text-slate-300 text-right">{est.total_bid != null ? money(Number(est.total_bid)) : '—'}</td>
-                      <td className="p-4 text-slate-400 text-sm">{est.created_at ? new Date(est.created_at).toLocaleDateString() : 'Just now'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        {/* Modal Dialog */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-6 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                <h2 className="text-xl font-bold text-white">Create New Estimate</h2>
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="text-slate-400 hover:text-white text-sm font-semibold"
+                >
+                  ✕
+                </button>
+              </div>
 
-        {/* Create Modal */}
-        {showModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-              <h2 className="text-xl font-bold text-white mb-4">Create New Estimate</h2>
-              <form onSubmit={handleCreate} className="space-y-4">
+              {errorMsg && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm">
+                  <strong>Error:</strong> {errorMsg}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveEstimate} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Project Name</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5">Project Name</label>
+                  <input 
+                    type="text" 
                     required
+                    placeholder="e.g. Canola Plant Shutdown Maintenance" 
                     value={projectName}
                     onChange={(e) => setProjectName(e.target.value)}
-                    placeholder="e.g. Canola Plant Shutdown Maintenance"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-400 text-sm"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Client Name</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5">Client Name</label>
+                  <input 
+                    type="text" 
                     required
+                    placeholder="e.g. Cargill Ltd." 
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
-                    placeholder="e.g. Cargill Ltd."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-400 text-sm"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Markup Percentage (%)</label>
-                  <input
-                    type="number"
+                  <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5">Target Markup Percentage (%)</label>
+                  <input 
+                    type="number" 
                     required
-                    value={markupPercentage}
-                    onChange={(e) => setMarkupPercentage(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-slate-100 focus:outline-none focus:border-amber-500"
+                    value={markupPct}
+                    onChange={(e) => setMarkupPct(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-amber-400 text-sm"
                   />
                 </div>
-                {error && <p className="text-sm text-red-400">{error}</p>}
-                <div className="flex justify-end gap-3 mt-6">
-                  <button
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  <button 
                     type="button"
-                    onClick={() => setShowModal(false)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg transition-colors"
+                    onClick={() => setIsModalOpen(false)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-4 py-2 rounded-lg text-sm transition-all"
                   >
                     Cancel
                   </button>
-                  <button
+                  <button 
                     type="submit"
-                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-2 rounded-lg transition-colors"
+                    disabled={loading}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2 rounded-lg text-sm transition-all shadow-lg"
                   >
-                    Save Estimate
+                    {loading ? "Saving to CRM..." : "Save & Open Estimator"}
                   </button>
                 </div>
               </form>
             </div>
           </div>
         )}
+
       </div>
     </main>
   );
