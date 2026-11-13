@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import AiScopeUpload from '@/components/estimates/AiScopeUpload';
 import SavedAssembliesLibrary, { Assembly } from '@/components/estimates/saved-assemblies-library';
 
 export default function NewEstimatePage() {
@@ -70,6 +71,7 @@ export default function NewEstimatePage() {
       {/* Right Column: Library & Summary Engine */}
       <div className="lg:col-span-4 space-y-6">
         
+        <AiScopeUpload onScopeProcessed={(data) => console.log(data)} />
         <SavedAssembliesLibrary onSelectAssembly={handleAddAssembly} />
         
         <div className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 sticky top-6">
