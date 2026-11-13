@@ -5,6 +5,7 @@ import AiScopeUpload from '@/components/estimates/AiScopeUpload';
 import SavedAssembliesLibrary, { Assembly } from '@/components/estimates/saved-assemblies-library';
 
 export default function NewEstimatePage() {
+  const [aiData, setAiData] = useState<{ estimatedLabor: number; estimatedMaterials: number; description: string } | null>(null);
   const [quoteItems, setQuoteItems] = useState<Assembly[]>([]);
 
   const handleAddAssembly = (assembly: Assembly) => {
@@ -73,7 +74,7 @@ export default function NewEstimatePage() {
                   <div className="flex items-center gap-6 text-sm">
                     <div className="text-right">
                       <p className="text-slate-400">{item.laborHours} hrs</p>
-                      <p className="text-slate-400">$ mat.</p>
+                      <p className="text-slate-400">${item.materialCost} mat.</p>
                     </div>
                     <button 
                       onClick={() => handleRemoveItem(item.id)}
@@ -93,7 +94,17 @@ export default function NewEstimatePage() {
       {/* Right Column: Library & Summary Engine */}
       <div className="lg:col-span-4 space-y-6">
         
-        <AiScopeUpload onScopeProcessed={(data) => console.log(data)} />
+        <AiScopeUpload onScopeProcessed={(data) => setAiData(data)} />
+        {aiData && (
+          <div className="bg-emerald-900/20 border border-emerald-800 p-4 rounded-lg">
+            <h4 className="text-emerald-400 font-semibold text-sm">AI Analysis Result</h4>
+            <p className="text-emerald-200/80 text-sm mt-1">{aiData.description}</p>
+            <div className="flex gap-4 mt-2 text-xs text-emerald-300">
+                <span>{aiData.estimatedLabor} labor hrs</span>
+                <span>${aiData.estimatedMaterials} mat.</span>
+            </div>
+          </div>
+        )}
         <SavedAssembliesLibrary onSelectAssembly={handleAddAssembly} />
         
         <div className="bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-800 sticky top-6">
