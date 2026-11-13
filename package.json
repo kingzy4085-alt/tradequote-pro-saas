@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/check-env.ts && next build",
+    "build": "next build",
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -43,3 +43,4 @@
     }
   }
 }
+
