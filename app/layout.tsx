@@ -1,13 +1,14 @@
+import { Analytics } from '@vercel/analytics/react';
 import type { Metadata, Viewport } from "next";
-import { Analytics } from '@vercel/analytics/react';
+
 import { Inter } from "next/font/google";
-import { Analytics } from '@vercel/analytics/react';
+
 import RegisterServiceWorker from "./register-sw";
-import { Analytics } from '@vercel/analytics/react';
+
 import { SiteNav, SiteFooter } from "./site-nav";
-import { Analytics } from '@vercel/analytics/react';
+
 import "./globals.css";
-import { Analytics } from '@vercel/analytics/react';
+
 
 const InterSans = Inter({
   variable: "--font-inter",
@@ -48,4 +49,3 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     </html>
   );
 }
-
