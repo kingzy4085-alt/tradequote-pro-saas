@@ -42,7 +42,7 @@ export default function ClientPortalPage() {
           {proposals.map((proposal) => (
             <div key={proposal.id} className="bg-slate-900 border border-slate-800 p-6 rounded-lg">
               <h2 className="text-xl font-bold">{proposal.project_name}</h2>
-              <p className="text-slate-400">Client: {proposal.client_name}</p>
+              <p className="text-slate-400">Client: {(proposal.client_name || "Unassigned Client")}</p>
               <p className="text-slate-400">Status: {proposal.status}</p>
               <p className="text-slate-400">Amount: ${proposal.amount}</p>
               {proposal.status !== "Approved" && (
