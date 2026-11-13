@@ -21,6 +21,28 @@ export default function NewEstimatePage() {
   const LABOR_RATE = 85.00; 
   const grossTotal = (totalLabor * LABOR_RATE) + totalMaterial;
 
+  const handleSave = async () => {
+    try {
+      const res = await fetch("/api/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: "New Estimate",
+          client_name: "New Client",
+          amount: grossTotal,
+          scope_details: "Generated via AI",
+          status: "Draft"
+        })
+      });
+      if (res.ok) {
+        alert("Estimate saved successfully!");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save estimate");
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 text-slate-200">
       
@@ -84,20 +106,21 @@ export default function NewEstimatePage() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Labor Subtotal (@ $85/hr):</span> 
-              <span className="font-medium text-slate-200">$</span>
+              <span className="font-medium text-slate-200">${totalLabor * 85}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Material Subtotal:</span> 
-              <span className="font-medium text-slate-200">$</span>
+              <span className="font-medium text-slate-200">${totalMaterial}</span>
             </div>
           </div>
           
           <div className="flex justify-between items-center text-lg font-bold text-white mb-6">
             <span>Gross Total:</span>
-            <span>$</span>
+            <span>${grossTotal}</span>
           </div>
 
           <button 
+            onClick={handleSave}
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-500 transition-colors shadow-sm disabled:opacity-50 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed"
             disabled={quoteItems.length === 0}
           >
