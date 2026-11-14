@@ -35,7 +35,7 @@ function redirectWithCookies(to: URL, from: NextResponse): NextResponse {
   return redirect;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // The app has no next/image. Next 14's optimizer has unpatched RCE advisories,
   // so it is closed here rather than left reachable.
   if (request.nextUrl.pathname.startsWith('/_next/image')) return new NextResponse('Not found', { status: 404 });
