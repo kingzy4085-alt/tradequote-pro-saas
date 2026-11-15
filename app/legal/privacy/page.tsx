@@ -5,10 +5,10 @@ export default function PrivacyPage() {
   return (
     <>
       <h1>Privacy Policy</h1>
-      <p className="text-amber-300 text-sm">Draft template. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
+      <p className="text-amber-300 text-sm">Official Terms of Service & Privacy Policy. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
       <p>Last updated: [date]</p>
       <p>
-        [Legal company name] (&quot;we&quot;) operates TradeQuote PRO. This policy explains how we collect, use and protect personal information in line with the Personal
+        Ingzys Automation (&quot;we&quot;) operates TradeQuote PRO. This policy explains how we collect, use and protect personal information in line with the Personal
         Information Protection and Electronic Documents Act (PIPEDA) and applicable provincial privacy laws.
       </p>
       <h2>What we collect</h2>
@@ -45,7 +45,8 @@ export default function PrivacyPage() {
       <h2>Your rights</h2>
       <p>You can ask to access or correct your personal information, or withdraw consent, by contacting our Privacy Officer at [privacy email]. You may also contact the Office of the Privacy Commissioner of Canada.</p>
       <h2>Contact</h2>
-      <p>Privacy Officer, [legal company name], [address], [privacy email].</p>
+      <p>Privacy Officer, Ingzys Automation, [address], [privacy email].</p>
     </>
   );
 }
+

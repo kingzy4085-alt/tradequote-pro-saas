@@ -228,7 +228,7 @@ These need you, not code. Decisions still open are also in [ROADMAP.md](ROADMAP.
 **Business and legal**
 
 - Business entity, Stripe account verification, GST/HST registration.
-- Finish the **Privacy Policy** and **Terms** in `app/legal/` with a Canadian lawyer (PIPEDA, liability, data location). Both are marked draft templates on the page and still have bracketed details. The retention periods in `lib/automation.ts` are stated in the privacy page, so change them together.
+- Finish the **Privacy Policy** and **Terms** in `app/legal/` with a Canadian lawyer (PIPEDA, liability, data location). Both are marked Official Terms of Service & Privacy Policys on the page and still have bracketed details. The retention periods in `lib/automation.ts` are stated in the privacy page, so change them together.
 - Ask the lawyer about account deletion and data export. There is no self-serve way to do either today.
 - A licence from CSA if the assistant should quote Canadian Electrical Code text. Today it summarizes and cites, never reproduces.
 - An independent security review or penetration test.
@@ -251,3 +251,4 @@ Left in place on purpose. None of it is used by the app.
 | `database/legacy/` | Old SQL kept for reference. Never run it. Delete when you no longer want it |
 | `tests/_tmp/` | One leftover scratch file that tests nothing. Delete |
 | `eslint.config.mjs` | References packages that aren't installed, so linting doesn't run. Install ESLint and add a CI step, or delete the file |
+

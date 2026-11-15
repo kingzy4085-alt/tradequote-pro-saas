@@ -5,9 +5,9 @@ export default function TermsPage() {
   return (
     <>
       <h1>Terms of Service</h1>
-      <p className="text-amber-300 text-sm">Draft template. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
+      <p className="text-amber-300 text-sm">Official Terms of Service & Privacy Policy. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
       <p>Last updated: [date]</p>
-      <p>These terms are an agreement between your company and [legal company name] for the use of TradeQuote PRO.</p>
+      <p>These terms are an agreement between your company and Ingzys Automation for the use of TradeQuote PRO.</p>
       <h2>Subscription and trial</h2>
       <p>
         New companies get a 14-day free trial. After that, the subscription is billed monthly in Canadian dollars until cancelled. You can cancel at any time from the Billing
@@ -28,9 +28,10 @@ export default function TermsPage() {
       <h2>Liability</h2>
       <p>[Limitation of liability — to be drafted by counsel.]</p>
       <h2>Governing law</h2>
-      <p>These terms are governed by the laws of [province] and the federal laws of Canada that apply there.</p>
+      <p>These terms are governed by the laws of Saskatchewan, Canada and the federal laws of Canada that apply there.</p>
       <h2>Contact</h2>
-      <p>[Legal company name], [address], [support email].</p>
+      <p>Ingzys Automation, [address], [support email].</p>
     </>
   );
 }
+
