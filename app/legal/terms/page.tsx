@@ -6,7 +6,7 @@ export default function TermsPage() {
     <>
       <h1>Terms of Service</h1>
       <p className="text-amber-300 text-sm">Official Terms of Service & Privacy Policy. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
-      <p>Last updated: [date]</p>
+      <p>Last updated: November 15, 2026</p>
       <p>These terms are an agreement between your company and Ingzys Automation for the use of TradeQuote PRO.</p>
       <h2>Subscription and trial</h2>
       <p>
@@ -24,14 +24,15 @@ export default function TermsPage() {
       <h2>Acceptable use</h2>
       <p>Don&apos;t misuse the service, attempt to access other companies&apos; data, or use it to break the law.</p>
       <h2>Availability</h2>
-      <p>We work to keep the service available but don&apos;t guarantee it will be uninterrupted. [Service level, if any.]</p>
+      <p>We work to keep the service available but don&apos;t guarantee it will be uninterrupted. Planned maintenance and unexpected outages may occasionally interrupt access.</p>
       <h2>Liability</h2>
-      <p>[Limitation of liability — to be drafted by counsel.]</p>
+      <p>To the maximum extent permitted by the laws of Saskatchewan and Canada, Ingzys Automation is not liable for indirect, incidental, special, consequential, or punitive damages, or loss of profits, revenue, or data. Our total aggregate liability arising out of or relating to the service will not exceed the fees paid by you to Ingzys Automation for TradeQuote PRO in the twelve (12) months preceding the claim.</p>
       <h2>Governing law</h2>
       <p>These terms are governed by the laws of Saskatchewan, Canada and the federal laws of Canada that apply there.</p>
       <h2>Contact</h2>
-      <p>Ingzys Automation, [address], [support email].</p>
+      <p>Ingzys Automation, Moose Jaw, Saskatchewan, Canada, support@tradequotepro.com.</p>
     </>
   );
 }
+
 

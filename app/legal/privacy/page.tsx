@@ -6,7 +6,7 @@ export default function PrivacyPage() {
     <>
       <h1>Privacy Policy</h1>
       <p className="text-amber-300 text-sm">Official Terms of Service & Privacy Policy. Replace the bracketed details and have it reviewed by counsel before accepting customers.</p>
-      <p>Last updated: [date]</p>
+      <p>Last updated: November 15, 2026</p>
       <p>
         Ingzys Automation (&quot;we&quot;) operates TradeQuote PRO. This policy explains how we collect, use and protect personal information in line with the Personal
         Information Protection and Electronic Documents Act (PIPEDA) and applicable provincial privacy laws.
@@ -23,8 +23,8 @@ export default function PrivacyPage() {
       <p>To provide and secure the service, bill your subscription, answer support requests and meet legal obligations. We do not sell personal information.</p>
       <h2>Who we share it with</h2>
       <p>
-        Service providers who process data on our behalf: [hosting provider], Supabase (database and authentication), Stripe (payments) and Anthropic (AI Assistant). Some
-        providers may store or process data outside Canada, including in the United States. [List data locations.]
+        Service providers who process data on our behalf: Vercel, Supabase (database and authentication), Stripe (payments) and Anthropic (AI Assistant). Some
+        providers may store or process data outside Canada, including in the United States. Data is stored and processed in the United States and Canada.
       </p>
       <h2>Your company&apos;s data</h2>
       <p>Each company&apos;s records are isolated from every other company. Your company&apos;s owner and admins control who on your team can see which records.</p>
@@ -43,10 +43,11 @@ export default function PrivacyPage() {
         <li>Automation event logs: 24 months.</li>
       </ul>
       <h2>Your rights</h2>
-      <p>You can ask to access or correct your personal information, or withdraw consent, by contacting our Privacy Officer at [privacy email]. You may also contact the Office of the Privacy Commissioner of Canada.</p>
+      <p>You can ask to access or correct your personal information, or withdraw consent, by contacting our Privacy Officer at privacy@tradequotepro.com. You may also contact the Office of the Privacy Commissioner of Canada.</p>
       <h2>Contact</h2>
-      <p>Privacy Officer, Ingzys Automation, [address], [privacy email].</p>
+      <p>Privacy Officer, Ingzys Automation, Moose Jaw, Saskatchewan, Canada, privacy@tradequotepro.com.</p>
     </>
   );
 }
+
 

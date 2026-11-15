@@ -4,7 +4,7 @@
 
 export const PLAN_NAME = 'TradeQuote PRO';
 
-/** The owner's decision, still pending. Change it here, and create a Stripe Price to match. */
+/** Monthly subscription price in CAD. Must match the active live STRIPE_PRICE_ID in Stripe. */
 export const PLAN_PRICE_MONTHLY_CAD = 299;
 
 /**
@@ -36,3 +36,4 @@ export function foundingPriceLabel(): string {
   const price = Math.round(PLAN_PRICE_MONTHLY_CAD * (100 - FOUNDING_OFFER.percentOff)) / 100;
   return `$${price.toLocaleString('en-CA', { minimumFractionDigits: Number.isInteger(price) ? 0 : 2, maximumFractionDigits: 2 })}`;
 }
+
