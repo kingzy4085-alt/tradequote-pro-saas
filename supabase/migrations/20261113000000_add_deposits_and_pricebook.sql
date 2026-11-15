@@ -23,3 +23,5 @@ VALUES
   ('BC-20A-1P', 'Breakers', '20 Amp Single Pole Circuit Breaker', 'ea', 12.50, 25.00),
   ('GRD-6AWG', 'Cabling', '6 AWG Bare Copper Ground Wire', 'm', 3.20, 15.00)
 ON CONFLICT DO NOTHING;
+ALTER TABLE public.material_price_book ENABLE ROW LEVEL SECURITY;
+
