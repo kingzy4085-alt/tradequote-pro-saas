@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { SupportEmailProvider } from "@/components/support-contact";
 import { env } from "@/lib/env";
 import RegisterServiceWorker from "./register-sw";
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <RegisterServiceWorker />
         {/* Error screens are client components with no props of their own, so they read the address from here */}
         <SupportEmailProvider email={env.supportEmail()}>{children}</SupportEmailProvider>
+        <Analytics />
       </body>
     </html>
   );
