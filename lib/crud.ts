@@ -203,3 +203,5 @@ export async function deleteRecord(_request: Request, { params }: Params) {
   if (!data?.length) return jsonError(404, 'Not found');
   return NextResponse.json({ ok: true });
 }
+
+

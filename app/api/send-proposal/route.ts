@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { requireApi } from '@/lib/api';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
+    await requireApi({ minRank: 20, write: true });
     const { clientEmail, clientName, estimateNumber, totalAmount } = await request.json();
 
     const data = await resend.emails.send({
@@ -23,3 +25,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+
+

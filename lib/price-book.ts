@@ -1,7 +1,7 @@
-import { createClient } from '@/lib/supabase-browser';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 export async function getMaterialPriceBook(companyId: string) {
-  const supabase = createClient();
+  const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from('material_price_book')
     .select('*')

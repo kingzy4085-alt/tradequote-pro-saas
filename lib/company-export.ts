@@ -41,6 +41,7 @@ const OTHER_SOURCES: ExportSource[] = [
   { table: 'alert_member_state', columns: '*', order: ['alert_id', 'user_id'] },
   { table: 'automation_company_state', columns: '*', order: ['company_id'] },
   { table: 'ai_usage', columns: '*', order: ['day'] },
+  { table: 'material_price_book', columns: '*', order: ['id'] },
 ];
 
 /**
@@ -153,3 +154,4 @@ export function exportFileName(companyName: string, now: Date = new Date()): str
     .replace(/-+$/g, '');
   return `tradequote-${slug || 'company'}-${now.toISOString().slice(0, 10)}.json`;
 }
+

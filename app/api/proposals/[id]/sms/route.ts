@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { sendSMSNotification } from '@/lib/notifications/sms';
+import { requireApi } from '@/lib/api';
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
+  await requireApi({ minRank: 20, write: true });
   const { id } = await context.params;
   const { phone } = await req.json();
   const portalUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/portal/proposals/${id}`;
@@ -17,3 +19,4 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 
   return NextResponse.json({ success: true });
 }
+

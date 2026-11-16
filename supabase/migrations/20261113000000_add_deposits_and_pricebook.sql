@@ -25,3 +25,6 @@ VALUES
 ON CONFLICT DO NOTHING;
 ALTER TABLE public.material_price_book ENABLE ROW LEVEL SECURITY;
 
+
+REVOKE ALL ON TABLE public.material_price_book FROM public, anon;
+
