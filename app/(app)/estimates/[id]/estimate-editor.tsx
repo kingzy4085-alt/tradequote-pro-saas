@@ -1,6 +1,7 @@
 'use client';
 
 import { AiScopeUpload } from '@/components/estimates/AiScopeUpload';
+import { VoiceEstimateRecorder } from '@/components/estimates/VoiceEstimateRecorder';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -239,7 +240,10 @@ export default function EstimateEditor({
 
   return (
     <>
-      <div className='mb-6'><AiScopeUpload onExtracted={handleScopeExtracted} /></div>
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        {canEditLines && <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />}
+        <AiScopeUpload onExtracted={handleScopeExtracted} />
+      </div>
     <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}

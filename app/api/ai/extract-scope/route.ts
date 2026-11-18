@@ -9,7 +9,9 @@ function getGeminiClient() {
 
 export async function POST(request: Request) {
   try {
-    await requireApi({ minRank: 20, write: true });
+    // requireApi returns (not throws) the 401/402/403 response, so it has to be checked
+    const ctx = await requireApi({ minRank: 20, write: true });
+    if (ctx instanceof Response) return ctx;
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
