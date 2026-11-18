@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
+import { requireApi } from '@/lib/api';
+import { getModule } from '@/lib/modules';
+
+const proposals = getModule('proposals')!;
 
 export async function POST(request: Request) {
+  const ctx = await requireApi({ minRank: proposals.write, write: true });
+  if (ctx instanceof Response) return ctx;
+
   try {
     const { clientEmail, clientName, estimateNumber, totalAmount } = await request.json();
-    
+
     const mailOptions = {
       from: 'TradeQuote PRO <onboarding@resend.dev>',
       to: [clientEmail],
@@ -15,7 +22,8 @@ export async function POST(request: Request) {
     };
 
     return NextResponse.json({ success: true, message: 'Proposal sent successfully', mailOptions });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unable to send proposal';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
