@@ -7,6 +7,7 @@ import { dbError, jsonError, readJson, requireApi } from '@/lib/api';
 import { withRestrictedMoney } from '@/lib/project-money';
 import { parseRecord, uuidSchema } from '@/lib/validation';
 import { JOB_PHOTOS_BUCKET } from '@/lib/daily-log';
+import { ATTACHMENTS_BUCKET, isAttachmentModule, recordFilePaths, recordNoun } from '@/lib/attachments';
 import { LINK_OPTION_LIMIT, parsePage } from '@/lib/pagination';
 import { RECORD_MODULES, deleteBlock } from '@/lib/records';
 import { IMMEDIATE_MODULES, notifyImmediateAlerts } from '@/lib/automation';
@@ -186,8 +187,21 @@ export async function deleteRecord(_request: Request, { params }: Params) {
     }
   }
 
+  // Attached files are the same: storage only lets them go while their record exists. The record's
+  // rows in record_attachments go with it in the database; this takes the files themselves.
+  if (isAttachmentModule(mod.slug)) {
+    const files = await recordFilePaths(ctx.supabase, mod.slug, params.id!, ctx.company.id);
+    const removed = 'error' in files ? { error: files.error } : files.paths.length ? await ctx.supabase.storage.from(ATTACHMENTS_BUCKET).remove(files.paths) : { error: null };
+    if (removed.error) {
+      console.error(`Could not remove ${mod.label} attachments`, removed.error);
+      return jsonError(502, `Could not remove the attached files, so the ${recordNoun(mod)} was kept. Try again.`);
+    }
+  }
+
   const { data, error } = await ctx.supabase.from(mod.table).delete().eq('id', params.id!).select('id');
   if (error) return dbError(error, `deleting from ${mod.label}`);
   if (!data?.length) return jsonError(404, 'Not found');
   return NextResponse.json({ ok: true });
 }
+
+

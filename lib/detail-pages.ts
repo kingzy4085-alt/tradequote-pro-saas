@@ -1,6 +1,7 @@
 // Modules with their own detail page (line items, photos, sign-off). The row title
 // in the module list opens it. Add a slug here when a module gets a detail page.
 export const DETAIL_PAGES: Record<string, string> = {
+  crm: '/crm',
   estimates: '/estimates',
   proposals: '/proposals',
   projects: '/projects',

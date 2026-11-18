@@ -19,7 +19,7 @@ export async function checkRateLimit(admin: SupabaseClient, key: string, limit: 
 }
 
 /** The signed-in user's own allowance, with limits set in the database. */
-export async function consumeUserRateLimit(supabase: SupabaseClient, bucket: 'invite' | 'onboarding'): Promise<boolean> {
+export async function consumeUserRateLimit(supabase: SupabaseClient, bucket: 'invite' | 'onboarding' | 'ai'): Promise<boolean> {
   const { data, error } = await supabase.rpc('consume_user_rate_limit', { p_bucket: bucket });
   if (error) {
     console.error('Rate limit check failed', error);

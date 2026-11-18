@@ -14,6 +14,8 @@ export const CompanyProfileSchema = z
     phone: text(40),
     email: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? null : v), z.string().trim().email('Enter a valid email').max(320).nullable()).optional(),
     address: text(500),
+    // GST/HST registration number, printed on invoices and other documents
+    tax_number: text(40),
     default_markup: percent(1000),
     default_tax: percent(100),
     default_labour_rate: percent(100000),
@@ -24,4 +26,4 @@ export const CompanyProfileSchema = z
   .strip();
 
 // default_markup and default_labour_rate aren't here: no signed-in user can read them directly. withCompanyRates adds them, for project managers and up.
-export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, default_tax, default_terms, overtime_multiplier, default_holdback_pct';
+export const COMPANY_PROFILE_COLUMNS = 'id, name, province, contact, phone, email, address, tax_number, default_tax, default_terms, overtime_multiplier, default_holdback_pct';

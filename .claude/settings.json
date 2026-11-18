@@ -1,0 +1,28 @@
+{
+  "enabledPlugins": {
+    "claude-code-setup@anthropic-plugin-directory": true,
+    "claude-md-management@anthropic-plugin-directory": true,
+    "claude-security@anthropic-plugin-directory": true,
+    "feature-dev@anthropic-plugin-directory": true,
+    "code-review@claude-plugins-official": true,
+    "pr-review-toolkit@anthropic-plugin-directory": true,
+    "ralph-loop@anthropic-plugin-directory": true,
+    "hookify@anthropic-plugin-directory": true,
+    "skill-creator@anthropic-plugin-directory": true,
+    "mcp-tunnels@anthropic-plugin-directory": true,
+    "superdesign@anthropic-plugin-directory": true,
+    "cognee-memory@anthropic-plugin-directory": true,
+    "firecrawl@anthropic-plugin-directory": true,
+    "tavily@anthropic-plugin-directory": true,
+    "sentry-cli@anthropic-plugin-directory": true,
+    "small-business@anthropic-plugin-directory": true,
+    "marketing@anthropic-plugin-directory": true,
+    "brand-voice@anthropic-plugin-directory": true,
+    "commercial-legal@anthropic-plugin-directory": true,
+    "privacy-legal@anthropic-plugin-directory": true,
+    "supabase@anthropic-plugin-directory": true,
+    "vercel@anthropic-plugin-directory": true,
+    "stripe@anthropic-plugin-directory": true,
+    "github@anthropic-plugin-directory": true
+  }
+}

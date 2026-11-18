@@ -106,6 +106,31 @@ describe('webhook: signature and configuration', () => {
   });
 });
 
+describe('webhook: a free trial survives a failed first payment', () => {
+  const future = new Date(Date.now() + 5 * 86_400_000).toISOString();
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+
+  it.each(['incomplete', 'incomplete_expired', 'canceled', 'unpaid'])('a first subscription that is %s leaves the trial company as it was', async (status) => {
+    const { company } = setup({ trial_ends_at: future }, [sub('sub_try', status)]);
+    expect((await post('customer.subscription.created', sub('sub_try', status))).status).toBe(200);
+    expect(company()).toMatchObject({ subscription_status: 'trialing', stripe_subscription_id: null });
+  });
+
+  it('the same subscription activates the company once the payment goes through', async () => {
+    const { company, stripe } = setup({ trial_ends_at: future }, [sub('sub_try', 'incomplete')]);
+    await post('customer.subscription.created', sub('sub_try', 'incomplete'));
+    stripe.store.set('sub_try', sub('sub_try', 'active'));
+    await post('customer.subscription.updated', sub('sub_try', 'active'));
+    expect(company()).toMatchObject({ subscription_status: 'active', stripe_subscription_id: 'sub_try' });
+  });
+
+  it('once the trial is over, an unpaid attempt is recorded as before', async () => {
+    const { company } = setup({ trial_ends_at: past }, [sub('sub_try', 'incomplete')]);
+    await post('customer.subscription.created', sub('sub_try', 'incomplete'));
+    expect(company()).toMatchObject({ subscription_status: 'incomplete', stripe_subscription_id: 'sub_try' });
+  });
+});
+
 describe('webhook: reordered events', () => {
   it('a late "created" with status incomplete cannot lock a paying customer', async () => {
     const { company } = setup({ stripe_subscription_id: 'sub_1', subscription_status: 'active' }, [sub('sub_1', 'active')]);

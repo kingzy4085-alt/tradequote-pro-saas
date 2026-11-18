@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, ButtonLink, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { formatMoney } from '@/lib/format';
 import { apiCall } from '@/lib/job-cost';
+import ShareWithClient from './share-with-client';
 
 export interface Proposal {
   id: string;
@@ -142,6 +143,8 @@ export default function ProposalEditor({ initial, madeProject, statuses, canWrit
         ) : (
           <Alert tone="info">Sending to the client is up to you: print this proposal and send it. When they accept, set the status to Accepted to {saved.project_id ? 'apply it to its project' : 'create the project'}.</Alert>
         )}
+
+        <ShareWithClient proposalId={saved.id} status={saved.status} canWrite={canWrite} />
 
         <Panel>
           <div className="grid sm:grid-cols-2 gap-4">

@@ -5,7 +5,9 @@ import { alertHref, companyToday, lastCheckedLabel, moduleLabel, SEVERITY_LABEL,
 import { barPercent, loadRollup, statusTone, type JobCost } from '@/lib/job-cost';
 import { getPageContext, type AppContext } from '@/lib/context';
 import { alertCountsByModule, attentionOrder, checkIsStale, dashboardAccess, hoursLabel, isOverdueAlert, plural, summariseJobs, type DashboardFigures } from '@/lib/dashboard';
+import { FOLLOW_UP_DAYS, WIN_RATE_DAYS, daysAgo, followUpsDue, winRateSince, type WinRate } from '@/lib/followups';
 import { formatMoney, formatValue } from '@/lib/format';
+import { PIPELINE_STAGES, toCard, type PipelineKind } from '@/lib/pipeline';
 import { listViewFilter } from '@/lib/list-views';
 import { MODULE_GROUPS, MODULES, getModule } from '@/lib/modules';
 import { provinceTimeZone } from '@/lib/provinces';
@@ -69,6 +71,30 @@ async function loadFigures(ctx: AppContext, today: string): Promise<DashboardFig
 async function loadJobs(ctx: AppContext): Promise<JobCost[] | null> {
   if (!dashboardAccess(ROLE_RANK[ctx.role]).jobMoney) return null;
   return loadRollup(ctx.supabase).catch(() => null);
+}
+
+const QUOTE_KINDS: PipelineKind[] = ['estimates', 'proposals'];
+const QUOTE_ROWS = 500;
+const stageStatus = (stage: string, kind: PipelineKind) => PIPELINE_STAGES.find((s) => s.key === stage)!.accepts[kind]!;
+
+/** Win rate over the last 90 days and how many sent quotes are due a chase. Null if either could not be read. */
+async function loadQuoteStats(ctx: AppContext, today: string): Promise<{ win: WinRate; followUps: number } | null> {
+  if (!QUOTE_KINDS.every((kind) => hasRank(ctx.role, getModule(kind)!.read))) return null;
+  const since = daysAgo(today, WIN_RATE_DAYS);
+  const results = await Promise.all(
+    QUOTE_KINDS.flatMap((kind) => {
+      const table = getModule(kind)!.table;
+      return [
+        ctx.supabase.from(table).select('id, status, updated_at').in('status', [stageStatus('won', kind), stageStatus('lost', kind)]).gt('updated_at', since).limit(QUOTE_ROWS),
+        ctx.supabase.from(table).select('id, title, status, notes, updated_at').eq('status', stageStatus('sent', kind)).lt('updated_at', daysAgo(today, FOLLOW_UP_DAYS - 1)).limit(QUOTE_ROWS),
+      ];
+    })
+  );
+  if (results.some((r) => r.error)) return null;
+  const cards = (i: number, kind: PipelineKind) => ((results[i].data ?? []) as unknown as Record<string, unknown>[]).map((row) => toCard(kind, row));
+  const decided = [...cards(0, 'estimates'), ...cards(2, 'proposals')];
+  const waiting = [...cards(1, 'estimates'), ...cards(3, 'proposals')];
+  return { win: winRateSince(decided, since), followUps: followUpsDue(waiting, today).length };
 }
 
 const SEVERITY_CHIP = {
@@ -188,13 +214,14 @@ export default async function CommandCenter() {
   const today = companyToday(ctx.company.province);
   const access = dashboardAccess(ROLE_RANK[ctx.role]);
   const visible = METRICS.filter((m) => hasRank(ctx.role, getModule(m.slug)!.read));
-  const [counts, attention, figures, jobRows, overdueRfis, overdueTasks] = await Promise.all([
+  const [counts, attention, figures, jobRows, overdueRfis, overdueTasks, quotes] = await Promise.all([
     Promise.all(visible.map((m) => countOpen(ctx, m))),
     loadAttention(ctx, today),
     loadFigures(ctx, today),
     loadJobs(ctx),
     countOverdue(ctx, 'rfis', today),
     countOverdue(ctx, 'tasks', today),
+    access.jobMoney ? loadQuoteStats(ctx, today) : null,
   ]);
 
   const canCreateEstimate = ctx.canWrite && hasRank(ctx.role, getModule('estimates')!.write);
@@ -205,7 +232,7 @@ export default async function CommandCenter() {
   const cards = figures?.timecards;
   const labour = figures?.labour;
   // A figure that failed to load shows as a dash and this note, never as zero
-  const someFailed = !figures || (access.jobMoney && !jobs);
+  const someFailed = !figures || (access.jobMoney && (!jobs || !quotes));
 
   return (
     <>
@@ -237,6 +264,18 @@ export default async function CommandCenter() {
             value={pipeline ? formatMoney(pipeline.total) : '—'}
             caption={pipeline ? `${plural(pipeline.proposals, 'sent proposal')}, ${plural(pipeline.estimates, 'submitted estimate')}` : undefined}
             href={statusLink('proposals', ['Sent'])}
+          />
+          <StatCard
+            label="Win Rate"
+            value={quotes ? (quotes.win.rate === null ? '—' : `${quotes.win.rate}%`) : '—'}
+            caption={quotes ? (quotes.win.decided ? `${quotes.win.won} won of ${quotes.win.decided} decided in the last ${WIN_RATE_DAYS} days` : `Nothing won or lost in the last ${WIN_RATE_DAYS} days`) : undefined}
+            href="/pipeline"
+          />
+          <StatCard
+            label="Follow-ups Due"
+            value={quotes ? quotes.followUps : '—'}
+            caption={`Sent quotes with no answer in ${FOLLOW_UP_DAYS} days`}
+            href="/pipeline#follow-up"
           />
           <StatCard label="Active Contract Value" value={jobs ? formatMoney(jobs.contract) : '—'} caption={jobs ? `${plural(jobs.activeJobs, 'active job')}, with approved changes` : undefined} href={statusLink('projects', ['Active'])} />
           <StatCard

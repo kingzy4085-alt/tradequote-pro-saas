@@ -16,6 +16,9 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/api/cron/',
   '/api/email/unsubscribe',
+  // The client portal: the link's token is the credential (see lib/portal.ts)
+  '/portal/',
+  '/api/portal/',
   '/robots.txt',
   '/sitemap.xml',
 ];

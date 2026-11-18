@@ -1,10 +1,14 @@
 'use client';
 
+import { AiScopeUpload } from '@/components/estimates/AiScopeUpload';
+import { VoiceEstimateRecorder } from '@/components/estimates/VoiceEstimateRecorder';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
+import { assemblySummary, expandAssembly, filterAssemblies, insertLines, isFilledLine, parseMultiplier, type Assembly } from '@/lib/assemblies';
 import { estimateTotals, type EstimateLine } from '@/lib/estimate-math';
+import { DEFAULT_NPT_PERCENT, isPermitLine, nptLine, parseNptPercent, permitDescription, productiveHours, withNptAllowance, withPermitLine } from '@/lib/industrial';
 import { formatMoney } from '@/lib/format';
 
 const BLANK: EstimateLine = { description: '', quantity: 1, unit: 'ea', material_unit_cost: 0, labour_hours_per_unit: 0 };
@@ -15,12 +19,14 @@ const toHeader = (e: Record<string, unknown>): Header =>
   Object.fromEntries(HEADER_KEYS.map((k) => [k, e[k] === null || e[k] === undefined ? '' : String(e[k])])) as Header;
 
 const cell = 'px-3 py-2 rounded-lg';
+const lineAction = 'inline-flex items-center min-h-[48px] lg:min-h-0 lg:py-1 text-amber-400 hover:text-amber-300 font-semibold text-sm';
 
 export default function EstimateEditor({
   estimate,
   initialItems,
   statuses,
   proposal,
+  province,
   canWrite,
 }: {
   estimate: Record<string, unknown> & { id: string };
@@ -28,8 +34,22 @@ export default function EstimateEditor({
   statuses: string[];
   /** The proposal made from this estimate, if there is one. */
   proposal: { id: string; status: string } | null;
+  /** The company's province, which decides how the permit line is worded. */
+  province?: string;
   canWrite: boolean;
 }) {
+  const handleScopeExtracted = (data: { estimatedLabor: number; estimatedMaterials: number; description: string }) => {
+    editHeader('scope', data.description);
+    const newLine: EstimateLine = {
+      description: 'AI Scope: ' + (data.description.length > 60 ? data.description.substring(0, 60) + '...' : data.description),
+      quantity: 1,
+      unit: 'item',
+      material_unit_cost: data.estimatedMaterials,
+      labour_hours_per_unit: data.estimatedLabor,
+    };
+    editItems([...items, newLine]);
+  };
+  
   const router = useRouter();
   const [converting, setConverting] = useState(false);
   // What the client was shown can't move under them. The database refuses it too.
@@ -40,6 +60,20 @@ export default function EstimateEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  // Industrial extras: the non-productive time allowance and the permit line
+  const [nptPct, setNptPct] = useState(String(DEFAULT_NPT_PERCENT));
+  const [extraNote, setExtraNote] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  // Saved assemblies: 'add' picks one from the library, 'save' turns ticked lines into a new one
+  const [panel, setPanel] = useState<'add' | 'save' | null>(null);
+  const [library, setLibrary] = useState<Assembly[] | null>(null);
+  const [asmQuery, setAsmQuery] = useState('');
+  const [asmTimes, setAsmTimes] = useState('1');
+  const [asmName, setAsmName] = useState('');
+  const [asmCategory, setAsmCategory] = useState('');
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [asmBusy, setAsmBusy] = useState(false);
+  const [asmError, setAsmError] = useState('');
+  const [asmNote, setAsmNote] = useState('');
 
   // Warn before leaving with unsaved changes
   useEffect(() => {
@@ -59,6 +93,87 @@ export default function EstimateEditor({
     setDirty(true);
   };
   const setItem = (i: number, k: keyof EstimateLine, v: string) => editItems(items.map((it, j) => (j === i ? { ...it, [k]: v } : it)));
+
+  const removeLine = (i: number) => {
+    editItems(items.filter((_, j) => j !== i));
+    // Ticks follow their lines
+    setPicked((p) => new Set([...p].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
+  };
+
+  function addNpt() {
+    const hours = productiveHours(items);
+    if (hours <= 0) return setExtraNote({ tone: 'error', text: 'Add your lines with labour hours first. The allowance is a share of those hours.' });
+    const pct = parseNptPercent(nptPct);
+    const line = nptLine(items, pct);
+    editItems(withNptAllowance(items, pct));
+    setExtraNote({ tone: 'success', text: `Non-productive time is ${line.labour_hours_per_unit} hours: ${pct}% of the ${hours} labour hours on the other lines. Press the button again after changing lines. Save the estimate to keep it.` });
+  }
+
+  function addPermit() {
+    if (items.some(isPermitLine)) return setExtraNote({ tone: 'error', text: 'This estimate already has a permit line. Type the fee in its material cost.' });
+    editItems(withPermitLine(items, province));
+    setExtraNote({ tone: 'success', text: `Added "${permitDescription(province)}". Type the fee from the authority's schedule in its material cost. Markup applies to it like any other line.` });
+  }
+
+  async function openAdd() {
+    setPanel('add');
+    setAsmError('');
+    setAsmNote('');
+    if (library) return;
+    setAsmBusy(true);
+    try {
+      const res = await fetch('/api/assemblies', { cache: 'no-store' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Could not load your assemblies');
+      setLibrary(json.data ?? []);
+    } catch (err) {
+      setAsmError(err instanceof TypeError ? 'Network error. Check your connection and try again.' : err instanceof Error ? err.message : 'Could not load your assemblies');
+    } finally {
+      setAsmBusy(false);
+    }
+  }
+
+  function addAssembly(a: Assembly) {
+    const times = parseMultiplier(asmTimes);
+    const added = expandAssembly(a.lines, times);
+    editItems(insertLines(items, added));
+    setPicked(new Set());
+    setAsmNote(`Added ${added.length} ${added.length === 1 ? 'line' : 'lines'} from ${a.name}${times === 1 ? '' : ` (x${times})`}. Save the estimate to keep them.`);
+  }
+
+  function openSave() {
+    setPanel('save');
+    setAsmError('');
+    setAsmNote('');
+    setPicked(new Set(items.flatMap((it, i) => (isFilledLine(it) ? [i] : []))));
+  }
+
+  async function saveAssembly() {
+    const lines = items.filter((it, i) => picked.has(i) && isFilledLine(it));
+    if (!asmName.trim()) return setAsmError('Give the assembly a name.');
+    if (!lines.length) return setAsmError('Tick at least one line that has a description, a cost or hours.');
+    setAsmBusy(true);
+    setAsmError('');
+    try {
+      const res = await fetch('/api/assemblies', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: asmName, category: asmCategory, lines }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Could not save the assembly');
+      setAsmNote(`Saved ${lines.length} ${lines.length === 1 ? 'line' : 'lines'} as the assembly ${asmName.trim()}.`);
+      setLibrary(null);
+      setAsmName('');
+      setAsmCategory('');
+      setPanel(null);
+    } catch (err) {
+      setAsmError(err instanceof TypeError ? 'Network error. Check your connection and try again.' : err instanceof Error ? err.message : 'Could not save the assembly');
+    } finally {
+      setAsmBusy(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -112,6 +227,10 @@ export default function EstimateEditor({
   }
 
   const canEditLines = canWrite && !withClient;
+  // Leaving for the Assemblies page drops anything unsaved here
+  const leaveCheck = (e: { preventDefault: () => void }) => {
+    if (dirty && !window.confirm('You have unsaved changes on this estimate. Leave without saving?')) e.preventDefault();
+  };
   const field = (k: keyof Header, label: string, type = 'text', locked = false) => (
     <div>
       <Label htmlFor={k}>{label}</Label>
@@ -121,7 +240,11 @@ export default function EstimateEditor({
 
   return (
     <>
-      <PageHeader
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        {canEditLines && <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />}
+        <AiScopeUpload onExtracted={handleScopeExtracted} />
+      </div>
+    <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}
         back={{ href: '/estimates', label: 'Back to Estimates' }}
@@ -202,6 +325,7 @@ export default function EstimateEditor({
             <table className="w-full text-left text-sm min-w-[860px]">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/50 text-slate-400 text-xs uppercase tracking-wider">
+                  {panel === 'save' && <th className="p-3">Use</th>}
                   <th className="p-3 w-[34%]">Description</th>
                   <th className="p-3">Qty</th>
                   <th className="p-3">Unit</th>
@@ -215,6 +339,19 @@ export default function EstimateEditor({
               <tbody className="divide-y divide-slate-800">
                 {items.map((it, i) => (
                   <tr key={i}>
+                    {panel === 'save' && (
+                      <td className="p-2">
+                        <label className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] lg:min-h-0 lg:min-w-0 lg:p-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-5 w-5 accent-amber-500"
+                            aria-label={`Include line ${i + 1} in the assembly`}
+                            checked={picked.has(i)}
+                            onChange={(e) => setPicked((p) => { const next = new Set(p); if (e.target.checked) next.add(i); else next.delete(i); return next; })}
+                          />
+                        </label>
+                      </td>
+                    )}
                     <td className="p-2">
                       <Input aria-label={`Line ${i + 1} description`} className={cell} value={it.description} disabled={!canEditLines} maxLength={500} placeholder="e.g. 3/4in EMT conduit" onChange={(e) => setItem(i, 'description', e.target.value)} />
                     </td>
@@ -234,7 +371,7 @@ export default function EstimateEditor({
                     <td className="p-3 text-right text-slate-300">{t.lines[i].hours.toFixed(2)}</td>
                     <td className="p-2 text-right">
                       {canEditLines && (
-                        <button type="button" onClick={() => editItems(items.filter((_, j) => j !== i))} className="text-slate-500 hover:text-red-400 px-2" aria-label={`Remove line ${i + 1}`}>
+                        <button type="button" onClick={() => removeLine(i)} className="text-slate-500 hover:text-red-400 px-2 min-h-[48px] min-w-[48px] lg:min-h-0 lg:min-w-0" aria-label={`Remove line ${i + 1}`}>
                           ✕
                         </button>
                       )}
@@ -245,10 +382,108 @@ export default function EstimateEditor({
             </table>
           </div>
           {canEditLines && (
-            <div className="p-3 border-t border-slate-800">
-              <button type="button" onClick={() => editItems([...items, { ...BLANK }])} className="text-amber-400 hover:text-amber-300 font-semibold text-sm">
+            <div className="p-3 border-t border-slate-800 flex flex-wrap gap-x-6 gap-y-1">
+              <button type="button" onClick={() => editItems([...items, { ...BLANK }])} className={lineAction}>
                 + Add line
               </button>
+              <button type="button" onClick={() => (panel === 'add' ? setPanel(null) : openAdd())} aria-expanded={panel === 'add'} className={lineAction}>
+                Add assembly
+              </button>
+              <button type="button" onClick={() => (panel === 'save' ? setPanel(null) : openSave())} aria-expanded={panel === 'save'} className={lineAction}>
+                Save lines as assembly
+              </button>
+            </div>
+          )}
+          {canEditLines && (
+            <div className="p-3 border-t border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-44">
+                  <Label htmlFor="npt-percent">Non-productive time %</Label>
+                  <Input id="npt-percent" type="number" min={0} max={100} step="any" value={nptPct} onChange={(e) => setNptPct(e.target.value)} />
+                </div>
+                <Button variant="secondary" onClick={addNpt}>
+                  Add or update NPT allowance
+                </Button>
+                <Button variant="secondary" onClick={addPermit}>
+                  Add permit and inspection fee
+                </Button>
+              </div>
+              <p className="text-sm text-slate-400">The allowance covers time that installs nothing: lockout/tagout, site orientation, permits and waiting on isolations.</p>
+              {extraNote && <Alert tone={extraNote.tone}>{extraNote.text}</Alert>}
+            </div>
+          )}
+          {canEditLines && (asmNote || panel) && (
+            <div className="p-4 border-t border-slate-800 space-y-4">
+              {asmError && <Alert>{asmError}</Alert>}
+              {asmNote && <Alert tone="success">{asmNote}</Alert>}
+
+              {panel === 'add' && (
+                <>
+                  <div className="grid sm:grid-cols-[minmax(0,1fr)_10rem] gap-4">
+                    <div>
+                      <Label htmlFor="assembly-search">Search your assemblies</Label>
+                      <Input id="assembly-search" type="search" value={asmQuery} placeholder="e.g. EV charger" onChange={(e) => setAsmQuery(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label htmlFor="assembly-times">How many</Label>
+                      <Input id="assembly-times" type="number" min={0} step="any" value={asmTimes} onChange={(e) => setAsmTimes(e.target.value)} />
+                    </div>
+                  </div>
+                  {asmBusy && <p className="text-sm text-slate-400">Loading your assemblies…</p>}
+                  {library && library.length === 0 && (
+                    <p className="text-sm text-slate-400">
+                      You have no saved assemblies yet. Use Save lines as assembly here, or set some up on the{' '}
+                      <Link href="/assemblies" className="underline text-amber-400" onClick={leaveCheck}>
+                        Assemblies page
+                      </Link>
+                      .
+                    </p>
+                  )}
+                  {library && library.length > 0 && (
+                    <>
+                      <ul className="divide-y divide-slate-800 border border-slate-800 rounded-xl max-h-96 overflow-y-auto">
+                        {filterAssemblies(library, asmQuery).map((a) => {
+                          const s = assemblySummary(a.lines);
+                          return (
+                            <li key={a.id} className="flex items-center justify-between gap-3 p-3">
+                              <div className="min-w-0">
+                                <p className="text-white font-semibold truncate">{a.name}</p>
+                                <p className="text-sm text-slate-400 truncate">
+                                  {[a.category, `${a.lines.length} ${a.lines.length === 1 ? 'line' : 'lines'}`, `${formatMoney(s.material)} material`, `${s.hours.toFixed(2)} hrs`].filter(Boolean).join(' · ')}
+                                </p>
+                              </div>
+                              <Button variant="secondary" className="min-h-[48px] lg:min-h-0 shrink-0" aria-label={`Add ${a.name}`} onClick={() => addAssembly(a)}>
+                                Add
+                              </Button>
+                            </li>
+                          );
+                        })}
+                        {filterAssemblies(library, asmQuery).length === 0 && <li className="p-3 text-sm text-slate-400">No assemblies match that search.</li>}
+                      </ul>
+                      <Link href="/assemblies" className="inline-flex items-center min-h-[48px] lg:min-h-0 text-sm text-slate-400 hover:text-slate-200 underline" onClick={leaveCheck}>
+                        Manage assemblies
+                      </Link>
+                    </>
+                  )}
+                </>
+              )}
+
+              {panel === 'save' && (
+                <div className="grid sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-4 items-end">
+                  <div>
+                    <Label htmlFor="assembly-name">Assembly name</Label>
+                    <Input id="assembly-name" value={asmName} maxLength={120} placeholder="e.g. Hot Tub Feed" onChange={(e) => setAsmName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="assembly-category">Trade or category</Label>
+                    <Input id="assembly-category" value={asmCategory} maxLength={60} placeholder="e.g. Residential" onChange={(e) => setAsmCategory(e.target.value)} />
+                  </div>
+                  <Button className="min-h-[48px] lg:min-h-0" disabled={asmBusy} onClick={saveAssembly}>
+                    {asmBusy ? 'Saving…' : `Save ${picked.size} ${picked.size === 1 ? 'line' : 'lines'}`}
+                  </Button>
+                  <p className="text-sm text-slate-400 sm:col-span-3">Tick the lines to keep in the Use column. The quantities here become the quantities for one of the assembly.</p>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -293,3 +528,4 @@ export default function EstimateEditor({
     </>
   );
 }
+

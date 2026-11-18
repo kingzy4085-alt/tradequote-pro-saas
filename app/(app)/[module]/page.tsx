@@ -11,7 +11,7 @@ export function generateMetadata({ params }: { params: { module: string } }) {
   return { title: mod ? `${mod.label} · TradeQuote PRO` : 'TradeQuote PRO' };
 }
 
-export default async function ModuleRoute({ params, searchParams }: { params: { module: string }; searchParams: { project?: string | string[]; new?: string | string[]; status?: string | string[]; view?: string | string[] } }) {
+export default async function ModuleRoute({ params, searchParams }: { params: { module: string }; searchParams: { project?: string | string[]; new?: string | string[]; status?: string | string[]; view?: string | string[]; q?: string | string[] } }) {
   const alias = MODULE_REDIRECTS[params.module];
   if (alias) redirect(`/${alias}`);
 
@@ -23,5 +23,5 @@ export default async function ModuleRoute({ params, searchParams }: { params: { 
   const { ctx } = result;
   if (!hasRank(ctx.role, mod.read)) notFound();
 
-  return <ModulePage slug={mod.slug} canWrite={ctx.canWrite && hasRank(ctx.role, mod.write)} canDelete={ctx.canWrite && hasRank(ctx.role, mod.remove)} initialProject={typeof searchParams.project === 'string' ? searchParams.project : undefined} initialStatuses={[searchParams.status ?? []].flat()} initialView={typeof searchParams.view === 'string' ? searchParams.view : undefined} startNew={searchParams.new === '1'} />;
+  return <ModulePage slug={mod.slug} canWrite={ctx.canWrite && hasRank(ctx.role, mod.write)} canDelete={ctx.canWrite && hasRank(ctx.role, mod.remove)} initialProject={typeof searchParams.project === 'string' ? searchParams.project : undefined} initialStatuses={[searchParams.status ?? []].flat()} initialView={typeof searchParams.view === 'string' ? searchParams.view : undefined} initialQuery={typeof searchParams.q === 'string' ? searchParams.q.slice(0, 100) : undefined} startNew={searchParams.new === '1'} />;
 }

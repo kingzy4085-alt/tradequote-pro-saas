@@ -339,9 +339,16 @@ describe('seams that hold: grants and row security', () => {
       expect(/user_company_id|user_rank|auth\.uid\(\)|auth\.jwt\(\)/.test(f.prosrc), `${f.sig} has no company check`).toBe(true);
     }
     expect(callable.map((f) => f.proname).sort()).toEqual([
-      'accept_invitation', 'change_order_money', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
-      'pending_invitations', 'project_money', 'remove_member', 'safety_photo_open', 'seed_job_budget_from_estimate', 'set_job_budget', 'set_job_closed', 'set_member_role', 'timecard_pay', 'timecard_workers', 'user_company_id', 'user_rank',
+      'accept_invitation', 'change_order_money', 'close_company', 'company_billing_ids', 'company_can_write', 'company_rates', 'consume_ai_message', 'consume_user_rate_limit', 'create_company', 'create_proposal_share', 'export_timecards', 'job_cost_rollup', 'job_photo_log_open',
+      'pending_invitations', 'project_money', 'remove_member', 'revoke_proposal_share', 'safety_photo_open', 'seed_job_budget_from_estimate', 'set_job_budget', 'set_job_closed', 'set_member_role', 'timecard_pay', 'timecard_workers', 'user_company_id', 'user_rank',
     ]);
+  });
+
+  // A view or table granted to the public key skips row security entirely: anyone on the internet could
+  // read every company's rows through it. Public features go through a server route (lib/portal-server.ts).
+  it('the public key can read and write no table, view or column at all', async () => {
+    expect(await t.asSystem(`select table_name, privilege_type from information_schema.role_table_grants where grantee = 'anon' and table_schema = 'public'`)).toEqual([]);
+    expect(await t.asSystem(`select table_name, column_name, privilege_type from information_schema.column_privileges where grantee = 'anon' and table_schema = 'public'`)).toEqual([]);
   });
 
   it('a database upgraded from the old baseline ends up with the same security as a new one', async () => {
@@ -385,8 +392,16 @@ describe('seams that hold: routes and the service role', () => {
       'app/api/team/route.ts',
       'lib/automation.ts',
       'lib/env.ts',
+      // The client portal: a visitor has no session, so its two database calls go through here and nowhere else
+      'lib/portal-server.ts',
       'lib/supabase/server.ts',
     ]);
+    // What that file may do with the service role: rate limits and the three portal functions. No table access.
+    const portal = readFileSync('lib/portal-server.ts', 'utf8');
+    expect(portal).not.toMatch(/\.from\(/);
+    expect([...portal.matchAll(/\.rpc\('([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(['portal_decide', 'portal_notice', 'portal_view']);
+    // The email it sends afterwards holds no key of its own: its settings come from lib/automation.ts
+    expect(readFileSync('lib/portal-notify.ts', 'utf8')).not.toMatch(/createSupabase|SERVICE_ROLE|\.from\(|\.rpc\(/);
   });
 
   it('no browser component imports the server client or the automation jobs', () => {
@@ -396,17 +411,24 @@ describe('seams that hold: routes and the service role', () => {
   });
 
   it('every route says who may call it', () => {
-    const open = new Set(['app/api/health/route.ts', 'app/api/leads/route.ts', 'app/api/email/unsubscribe/route.ts', 'app/api/stripe/webhook/route.ts']);
+    const open = new Set(['app/api/health/route.ts', 'app/api/leads/route.ts', 'app/api/email/unsubscribe/route.ts', 'app/api/stripe/webhook/route.ts', 'app/api/portal/[token]/route.ts']);
     for (const { path, src } of routes) {
       if (open.has(path)) continue;
       expect(/requireApi\(|requireCron\(|auth\.getUser\(|from '@\/lib\/crud'/.test(src), path).toBe(true);
     }
     expect(routes.find((r) => r.path.endsWith('stripe/webhook/route.ts'))!.src).toContain('constructEvent');
     expect(routes.find((r) => r.path.endsWith('email/unsubscribe/route.ts'))!.src).toContain('verifyUnsubscribeToken');
+    // The client portal's credential is the link's token: checked before anything else, then rate-limited and looked up by its hash
+    const portalRoute = routes.find((r) => r.path.endsWith('portal/[token]/route.ts'))!.src;
+    expect(portalRoute.indexOf('isPortalToken(params.token)')).toBeGreaterThan(-1);
+    expect(portalRoute.indexOf('isPortalToken(params.token)')).toBeLessThan(portalRoute.indexOf('readJson('));
+    expect(portalRoute).toContain('answerPortal(');
+    expect(portalRoute).not.toMatch(/createSupabase|\.from\(|\.rpc\(/);
   });
 
   it('every write route is closed to a lapsed company, except those that have to stay open', () => {
-    const exempt = ['app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
+    // Closing the account and reporting an error have to work for a company that stopped paying, as billing does
+    const exempt = ['app/api/account/close/route.ts', 'app/api/assistant/route.ts', 'app/api/billing/checkout/route.ts', 'app/api/billing/portal/route.ts', 'app/api/client-errors/route.ts', 'app/api/company/route.ts', 'app/api/team/route.ts', 'app/api/timecards/export/route.ts'];
     for (const { path, src } of routes) {
       if (!/requireApi\(/.test(src) || exempt.includes(path)) continue;
       const handlers = src.split(/export async function /).filter((s) => /^(POST|PUT|PATCH|DELETE)/.test(s));
@@ -416,6 +438,18 @@ describe('seams that hold: routes and the service role', () => {
     for (const name of ['createRecord', 'updateRecord', 'deleteRecord']) {
       expect(crud.split(`export async function ${name}`)[1].split('export async function')[0], name).toMatch(/write: true/);
     }
+  });
+
+  it('the error report route stays open to a lapsed company only because it stores nothing', () => {
+    const report = routes.find((r) => r.path === 'app/api/client-errors/route.ts')!.src;
+    // Any signed-in member, and the one thing it does is log: no database, no service role, nothing sent on
+    expect([...report.matchAll(/export async function (\w+)/g)].map((m) => m[1])).toEqual(['POST']);
+    expect(report).toContain('requireApi({ minRank: 1 })');
+    expect(report).not.toMatch(/supabase|createSupabase|fetch\(|sendEmail|write: true/);
+    expect(readFileSync('lib/client-errors.ts', 'utf8')).not.toMatch(/createSupabase|\.from\(|\.rpc\(|fetch\(/);
+    // Who is calling is settled before the body is read, and the answer carries nothing the caller sent
+    expect(report.indexOf('requireApi(')).toBeLessThan(report.indexOf('readJson('));
+    for (const [, reply] of report.matchAll(/jsonError\(\d+, ([^)]*)\)/g)) expect(reply).toMatch(/^'[^']*'$/);
   });
 
   it('every cron route refuses a missing or wrong secret, and refuses when none is set', async () => {

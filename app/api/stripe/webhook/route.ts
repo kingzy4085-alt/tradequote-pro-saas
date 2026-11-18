@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
-import { findLiveSubscription, getStripe, subscriptionEnded, subscriptionLive, subscriptionUpdate } from '@/lib/billing';
+import { findLiveSubscription, getStripe, keepsFreeTrial, subscriptionEnded, subscriptionLive, subscriptionUpdate } from '@/lib/billing';
 import { env } from '@/lib/env';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 import { uuidSchema } from '@/lib/validation';
@@ -14,8 +14,10 @@ interface CompanyBilling {
   id: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
+  subscription_status?: string | null;
+  trial_ends_at?: string | null;
 }
-const COMPANY_COLUMNS = 'id, stripe_customer_id, stripe_subscription_id';
+const COMPANY_COLUMNS = 'id, stripe_customer_id, stripe_subscription_id, subscription_status, trial_ends_at';
 
 const idOf = (value: string | { id: string } | null | undefined) => (typeof value === 'string' ? value : (value?.id ?? null));
 
@@ -132,7 +134,9 @@ export async function POST(request: Request) {
         console.warn(`Stripe event ${event.id}: no company for customer ${customerId}`);
       } else {
         const apply = await subscriptionToApply(stripe, company, incoming, customerId);
-        if (apply) {
+        if (apply && keepsFreeTrial(company, apply)) {
+          console.warn(`Stripe event ${event.id}: ${apply.id} is ${apply.status}; company ${company.id} keeps its free trial`);
+        } else if (apply) {
           const { error } = await admin
             .from('companies')
             .update({ ...subscriptionUpdate(apply), stripe_customer_id: customerId })

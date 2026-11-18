@@ -1505,6 +1505,8 @@ describe('the service role stays where it belongs', () => {
       'app/api/stripe/webhook/route.ts',
       'app/api/team/route.ts',
       'lib/automation.ts',
+      // The client portal's two server-only database calls (see tests/review.security.test.ts for what it may do)
+      'lib/portal-server.ts',
     ]);
     // Any cron route may, as long as it checks the cron secret
     const isGuardedCron = (f: string) => f.startsWith('app/api/cron/') && readFileSync(f, 'utf8').includes('requireCron(request)');

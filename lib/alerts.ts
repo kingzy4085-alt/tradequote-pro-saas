@@ -52,6 +52,10 @@ export interface AutomationRule {
 }
 
 const ACTIVE_RECEIVABLE = ['Current', '30 Days', '60 Days', '90+ Days'];
+/** The proposal's most recent answered link, as the tail of a subquery with `s` as the link. */
+const LATEST_ANSWER = 'from public.proposal_shares s where s.proposal_id = r.id and s.company_id = r.company_id and s.decided_at is not null order by s.decided_at desc, s.id limit 1';
+/** Answered on the company's own today or one of the 6 days before it. */
+const PROPOSAL_ANSWERED_WHERE = `exists (select 1 from public.proposal_shares s where s.proposal_id = r.id and s.company_id = r.company_id and s.decided_at is not null and $2 - public.alert_local_date(s.decided_at, $7) between 0 and 6)`;
 
 export const AUTOMATION_RULES: AutomationRule[] = [
   // Finance
@@ -105,6 +109,10 @@ export const AUTOMATION_RULES: AutomationRule[] = [
   // Sales
   { key: 'proposals.valid', module: 'proposals', table: 'proposals', group: 'Sales', kind: 'date', minRank: 3, dateColumn: 'valid_until', statuses: ['Sent'], offsets: [7, 0], soon: 'Prices lapse in {n}', past: 'Prices lapsed {n} ago', severity: 'warning', overdueWord: 'Lapsed' },
   { key: 'proposals.follow_up', module: 'proposals', table: 'proposals', group: 'Sales', kind: 'age', minRank: 3, dateColumn: 'updated_at', statuses: ['Sent'], ageDays: 14, soon: 'No change in {n}. Time to follow up.', severity: 'info' },
+  // A client answered through the shared link (proposal_shares) in the last 7 days. The email goes at once (lib/portal-notify.ts); this keeps it
+  // on the Attention panel for the week. The bucket is the answered link, so a proposal shared again and answered again is new news.
+  // Seeded by supabase/migrations/20261112000050_proposal_answered_alert.sql.
+  { key: 'proposals.answered', module: 'proposals', table: 'proposals', group: 'Sales', kind: 'condition', minRank: 3, whereSql: PROPOSAL_ANSWERED_WHERE, bucketSql: `(select s.id::text ${LATEST_ANSWER})`, detailSql: `(select case s.decision when 'accepted' then 'Accepted' || coalesce(' and signed by ' || s.signer_name, '') || '.' else 'Declined.' || coalesce(' Reason: ' || left(s.decline_reason, 200), '') end ${LATEST_ANSWER})`, soon: 'The client answered through the shared link.', severity: 'info' },
   { key: 'estimates.bid_due', module: 'estimates', table: 'estimates', group: 'Sales', kind: 'date', minRank: 3, dateColumn: 'bid_due', statuses: ['Draft', 'Submitted'], offsets: [3, 1], soon: 'Bid due in {n}', past: 'Bid date passed {n} ago', severity: 'warning', overdueWord: 'Past bid date' },
   { key: 'rfq.deadline', module: 'rfq', table: 'rfq', group: 'Sales', kind: 'date', minRank: 2, dateColumn: 'deadline', statuses: ['Sent'], offsets: [2, 0], soon: 'Quote due in {n}', past: 'Quote late by {n}', severity: 'warning', overdueWord: 'Late' },
   { key: 'rfp.closing', module: 'rfp', table: 'rfp', group: 'Sales', kind: 'date', minRank: 3, dateColumn: 'closing_date', statuses: ['Reviewing', 'Bidding'], offsets: [7, 2], soon: 'Closes in {n}', past: 'Closed {n} ago', severity: 'warning', overdueWord: 'Closed' },
