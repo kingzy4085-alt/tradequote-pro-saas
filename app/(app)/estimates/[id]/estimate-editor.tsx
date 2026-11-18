@@ -1,6 +1,5 @@
 'use client';
 
-import { AiScopeUpload } from '@/components/estimates/AiScopeUpload';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -37,18 +36,6 @@ export default function EstimateEditor({
   province?: string;
   canWrite: boolean;
 }) {
-  const handleScopeExtracted = (data: { estimatedLabor: number; estimatedMaterials: number; description: string }) => {
-    editHeader('scope', data.description);
-    const newLine: EstimateLine = {
-      description: 'AI Scope: ' + (data.description.length > 60 ? data.description.substring(0, 60) + '...' : data.description),
-      quantity: 1,
-      unit: 'item',
-      material_unit_cost: data.estimatedMaterials,
-      labour_hours_per_unit: data.estimatedLabor,
-    };
-    editItems([...items, newLine]);
-  };
-  
   const router = useRouter();
   const [converting, setConverting] = useState(false);
   // What the client was shown can't move under them. The database refuses it too.
@@ -239,8 +226,7 @@ export default function EstimateEditor({
 
   return (
     <>
-      <div className='mb-6'><AiScopeUpload onExtracted={handleScopeExtracted} /></div>
-    <PageHeader
+      <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}
         back={{ href: '/estimates', label: 'Back to Estimates' }}
