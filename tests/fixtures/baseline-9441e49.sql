@@ -119,7 +119,7 @@ begin
 end $$;
 
 create or replace function public.pending_invitations()
-returns table (token text, company_name text, role text)
+returns table (token text, name text, role text)
 language sql stable security definer set search_path = public as $$
   select i.token, c.name, i.role
   from public.invitations i join public.companies c on c.id = i.company_id

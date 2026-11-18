@@ -38,3 +38,121 @@ Run before declaring multi-file work done, in order:
 3. `npm test` — vitest (includes PGlite DB tests)
 4. `npm run build` — runs `scripts/check-env.ts` then `next build`
 Report failures with their actual output; don't mark work done while any step fails.
+
+---
+
+# Repository Safety Addendum
+
+## Repository safety
+
+Preserve the existing dirty working tree. There are pre-existing modified and untracked files in this repository. Do not discard, overwrite, stage, commit, clean, or otherwise alter unrelated work.
+
+### Prohibited Git operations
+
+Do **not** run any of the following commands, directly or indirectly, unless I explicitly request that exact Git operation:
+
+- `git add`
+- `git add .`
+- `git add -A`
+- `git clean`
+- `git clean -f`
+- `git clean -fd`
+- `git reset --hard`
+- `git reset --merge`
+- `git checkout -- .`
+- `git restore .`
+- `git restore --source ...`
+- any equivalent command intended to bulk-stage, bulk-clean, discard, overwrite, or reset my existing working-tree changes
+
+Do not automatically stage or commit files.
+
+If a task requires a Git operation that may discard, overwrite, clean, stage, or commit existing work, stop and tell me what operation would be required instead of running it.
+
+## Critical migration quarantine
+
+The following two migrations are known-bad and are intentionally quarantined:
+
+- `20261101000050_auth_helpers.sql`
+- `20261111000000_user_company_id.sql`
+
+These files must **never** be moved, copied, generated, restored, renamed, or recreated inside `supabase/migrations/`.
+
+They are intentionally kept in `migration-quarantine/`.
+
+Do not modify or delete the quarantined copies unless I explicitly instruct you to.
+
+The valid `supabase/migrations/` directory currently contains 24 migrations. Do not reintroduce either quarantined migration.
+
+## Why these migrations are quarantined
+
+The quarantined migrations overwrite the correct TradeQuote role model and auth helpers with an incompatible role model. The valid application role ranks are:
+
+- electrician = 1
+- foreman = 2
+- project_manager = 3
+- admin = 4
+- owner = 5
+
+The quarantined migrations used incompatible roles/ranks such as `worker` and `estimator`, which caused users such as electricians, foremen, and project managers to resolve incorrectly and triggered widespread RLS failures. They also recreated security-definer helpers without the expected hardened empty `search_path`.
+
+Do not weaken RLS, authentication, authorisation, role checks, tenant isolation, or database security to work around a failure.
+
+## Working rules
+
+Before making changes:
+
+1. Inspect `git status --short`.
+2. Preserve all unrelated working-tree changes.
+3. Change only files required for the requested task.
+4. Prefer the smallest root-cause fix over broad refactoring.
+5. Never weaken RLS, authentication, permissions, tenant isolation, validation, or tests to make checks pass.
+6. Never use `any`, `@ts-ignore`, `eslint-disable`, skipped tests, weakened assertions, or disabled security controls as shortcuts.
+7. Never modify a test merely to make a failure disappear. If a test appears wrong or corrupted, compare it with Git history/diff before changing it.
+8. Do not stage, commit, clean, reset, restore, or discard anything unless I explicitly request that specific Git action.
+9. Do not modify generated files unless the repository explicitly expects them to be regenerated.
+10. If a proposed action conflicts with these rules, stop and explain the conflict instead of performing the action.
+
+## Text and encoding safety
+
+This repository has previously experienced mojibake/Unicode corruption in working files. Treat sequences such as `Ã`, `Â`, or corrupted `â...` text as suspicious.
+
+Before changing application logic to accommodate suspicious text:
+
+1. Compare the affected file with Git using `git diff`.
+2. Determine whether the working copy contains corrupted Unicode while the committed version contains the intended character.
+3. Restore or repair only confirmed corruption without discarding unrelated changes.
+
+Do not change correct application behaviour merely to accept mojibake-corrupted test data.
+
+## API security
+
+Protected API routes must follow the repository's established authentication and authorisation patterns, such as `requireApi(...)`, with the appropriate module role and `write: true` for write operations.
+
+Do not add dummy authentication strings merely to satisfy a test. Enforce the actual repository security model.
+
+## Current verified baseline
+
+At the time these rules were written, the repository had the following verified baseline after the quarantined migrations were removed from `supabase/migrations/`:
+
+- TypeScript/typecheck: PASS
+- `npm run db:check`: PASS with 24 unique migrations
+- Test files: 47/47 PASS
+- Tests: 2131/2131 PASS
+- Production build: PASS
+- Next.js production compilation: PASS
+- RLS and tenant-isolation tests: PASS
+- Timecard tests: PASS
+- Safety tests: PASS
+
+Treat regressions from this baseline as problems to diagnose by root cause. Do not suppress failures to recreate the baseline artificially.
+
+## Known validated fixes
+
+A validated commit was created for these fixes:
+
+- commit `df3925e` – `Fix API auth and company export Unicode handling`
+- `app/api/send-proposal/route.ts`: requires authenticated proposal write access via the repository's `requireApi` pattern
+- `lib/company-export.ts`: uses the explicit Unicode combining-mark range `[\\u0300-\\u036f]` when producing safe export filenames
+
+Preserve these fixes unless I explicitly request a change and the change is validated by the relevant tests.
+
