@@ -50,3 +50,8 @@ supabase/.temp/
 
 # Local AI tool settings. They can hold provider keys, so they never belong in the repo.
 .continue/
+
+# Local sensitive artefacts: lead lists hold personal email addresses, fix-pw.js is a one-off credential script
+/contractor_leads*.csv
+/fix-pw.js
+/vitest-fail.txt

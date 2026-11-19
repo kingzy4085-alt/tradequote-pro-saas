@@ -1,7 +1,8 @@
 // Checks a production deployment has its settings before Vercel builds it, so a missing key fails the
 // deploy instead of the first customer's click. Reports names and rules only, never a value.
 //
-// Runs from `npm run build`. It does nothing unless VERCEL_ENV=production. To try it by hand:
+// Runs from `npm run build`. Production builds check every setting; Preview builds only check the public
+// Supabase settings (and any half-set Twilio group). Other builds are skipped. To try it by hand:
 //   node --env-file=.env.local scripts/check-env.ts --force
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -40,6 +41,10 @@ const REQUIRED: Array<{ name: string; rule?: Rule }> = [
   { name: 'STRIPE_WEBHOOK_SECRET', rule: startsWith('whsec_') },
   { name: 'STRIPE_PRICE_ID', rule: startsWith('price_') },
   { name: 'ANTHROPIC_API_KEY' },
+  { name: 'GEMINI_API_KEY' },
+  { name: 'TWILIO_ACCOUNT_SID' },
+  { name: 'TWILIO_AUTH_TOKEN' },
+  { name: 'TWILIO_PHONE_NUMBER' },
   { name: 'CRON_SECRET', rule: atLeast(32) },
   { name: 'RESEND_API_KEY' },
   { name: 'EMAIL_FROM' },
@@ -49,6 +54,23 @@ const REQUIRED: Array<{ name: string; rule?: Rule }> = [
 
 // The values .env.example ships with, which would otherwise pass as "set"
 const isPlaceholder = (value: string) => value.includes('...') || /your[-_]/i.test(value);
+
+const TWILIO = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+const PREVIEW_REQUIRED = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+
+// Twilio is all or nothing: a partial set silently turns SMS off
+function partialTwilio(env: Env): string[] {
+  const missing = TWILIO.filter((name) => !env[name]?.trim());
+  return missing.length > 0 && missing.length < TWILIO.length
+    ? missing.map((name) => `${name} is not set, but other Twilio settings are (set all three or none)`)
+    : [];
+}
+
+// Preview deployments need a working Supabase connection, but not the production-only integrations
+export function checkPreviewEnv(env: Env): { problems: string[]; warnings: string[] } {
+  const problems = PREVIEW_REQUIRED.filter((name) => !env[name]?.trim()).map((name) => `${name} is not set`);
+  return { problems: [...problems, ...partialTwilio(env)], warnings: [] };
+}
 
 export function checkProductionEnv(env: Env): { problems: string[]; warnings: string[] } {
   const problems: string[] = [];
@@ -75,17 +97,18 @@ export function checkProductionEnv(env: Env): { problems: string[]; warnings: st
 }
 
 export function run(env: Env, args: string[]): number {
-  if (env.VERCEL_ENV !== 'production' && !args.includes('--force')) {
-    console.log('check-env: skipped, this is not a Vercel production build.');
+  const preview = env.VERCEL_ENV === 'preview' && !args.includes('--force');
+  if (env.VERCEL_ENV !== 'production' && !preview && !args.includes('--force')) {
+    console.log('check-env: skipped, this is not a Vercel preview or production build.');
     return 0;
   }
-  const { problems, warnings } = checkProductionEnv(env);
+  const { problems, warnings } = preview ? checkPreviewEnv(env) : checkProductionEnv(env);
   for (const warning of warnings) console.warn(`check-env warning: ${warning}`);
   if (problems.length === 0) {
-    console.log('check-env: production settings look right.');
+    console.log(`check-env: ${preview ? 'preview' : 'production'} settings look right.`);
     return 0;
   }
-  console.error('check-env: this production build has settings to fix. See .env.example and the README.');
+  console.error('check-env: this build has settings to fix. See .env.example and the README.');
   for (const problem of problems) console.error(`  - ${problem}`);
   return 1;
 }
