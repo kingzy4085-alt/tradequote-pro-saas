@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireApi } from '@/lib/api';
+import { jsonError, requireApi } from '@/lib/api';
 import { getModule } from '@/lib/modules';
 
 const proposals = getModule('proposals')!;
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, message: 'Proposal sent successfully', mailOptions });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unable to send proposal';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Proposal send failed', err);
+    return jsonError(500, 'Unable to send proposal');
   }
 }

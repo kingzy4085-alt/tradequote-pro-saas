@@ -49,7 +49,7 @@ Needs Node 22.18 or newer on the 22 line (see [`.nvmrc`](.nvmrc)).
 
 ### 1. Supabase
 
-Create a new project, then run **all** of these in the SQL editor, in this order. Or use `supabase link` and `supabase db push`, which runs them in the same order. Don't mix the two without `supabase migration repair`, because the CLI doesn't know what you ran by hand.
+Create a new project, then run **all** of these (29 files; `npm run db:check` counts them) in the SQL editor, in this order. Or use `supabase link` and `supabase db push`, which runs them in the same order. Don't mix the two without `supabase migration repair`, because the CLI doesn't know what you ran by hand.
 
 | # | File in `supabase/migrations/` | What it adds |
 | --- | --- | --- |
@@ -66,6 +66,22 @@ Create a new project, then run **all** of these in the SQL editor, in this order
 | 11 | `20261104000300_cleanups.sql` | Small fixes |
 | 12 | `20261104000310_contract_rules.sql` | Who can read contract money, what a stale draft can bill |
 | 13 | `20261104000320_review_fixes.sql` | Fixes from review of money, security and first use |
+| 14 | `20261112000010_client_portal.sql` | Client portal links and decisions |
+| 15 | `20261112000020_assemblies.sql` | Assemblies library |
+| 16 | `20261112000030_company_tax_number.sql` | Company tax number |
+| 17 | `20261112000040_portal_notice.sql` | Portal notice |
+| 18 | `20261112000050_proposal_answered_alert.sql` | Alert when a client answers a proposal |
+| 19 | `20261113000000_add_deposits_and_pricebook.sql` | Deposits and price book |
+| 20 | `20261113000105_restore_company_can_write.sql` | Restores `company_can_write()` |
+| 21 | `20261113000110_invoice_payments.sql` | Invoice payments |
+| 22 | `20261113000115_restore_client_portal.sql` | Restores the client portal objects |
+| 23 | `20261113000120_portal_lines.sql` | Proposal lines shown in the portal |
+| 24 | `20261113000122_restore_core_helpers.sql` | Restores the core auth helpers |
+| 25 | `20261113000125_restore_site_vault.sql` | Restores the site vault |
+| 26 | `20261113000130_attachments.sql` | Attachments |
+| 27 | `20261113000140_company_logo_and_closure.sql` | Company logo and account closure |
+| 28 | `20261117000000_ai_rate_limit.sql` | Hourly AI request allowance |
+| 29 | `20261118000100_harden_auth_helper_search_path.sql` | Empty `search_path` on the auth helper functions |
 
 The old scripts in `database/legacy/` are for reference only. Don't run them.
 
@@ -83,6 +99,16 @@ The old scripts in `database/legacy/` are for reference only. Don't run them.
 | Change Email Address | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
 | Reset Password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
 
+**Password reset flow (scanner-safe).** Mail security scanners open every link in an email, which would spend a one-time token before the person clicks. So a reset link never signs anyone in on a plain GET:
+
+1. The Reset Password email links to `/auth/callback?token_hash=…&type=recovery` (the template above).
+2. `GET /auth/callback` does **not** verify a `recovery` token. It redirects (303) to `/auth/confirm`, carrying `token_hash`, `type` and a safe `next`.
+3. `/auth/confirm` shows a **Continue** button. Scanners don't press buttons, so the token is still unused.
+4. Continue sends `POST /auth/callback`, which checks the request came from this site, verifies the token once, signs that browser in and redirects (303).
+5. The person lands on `/update-password` to choose a new password.
+
+Other template types (signup, invite, magic link, email change) are still verified on the GET. **The Reset Password template in Supabase must use the `token_hash` link in the table above** (the `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` placeholder link). Supabase's default `{{ .ConfirmationURL }}` link is not scanner-safe and opens in the browser that asked only. This repository can't change that setting: edit it under Supabase → Auth → Email Templates.
+
 ### 2. Stripe
 
 Create a Product with a recurring monthly **CAD** Price at the figure in `lib/plan.ts` and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.
@@ -90,6 +116,12 @@ Create a Product with a recurring monthly **CAD** Price at the figure in `lib/pl
 ### 3. Claude API
 
 Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Without it the assistant says it isn't configured and everything else works.
+
+Voice-to-estimate and scope extraction use Google Gemini (`gemini-2.5-flash`): set `GEMINI_API_KEY` from aistudio.google.com. Without it those two features answer that they aren't set up. A **Vercel production build fails if it is missing**.
+
+Texting a proposal link to a client uses Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` (international format, like `+13065550123`). All three go together. Setting only some fails the production build, and setting none only prints a warning.
+
+**Build checks.** `scripts/check-env.ts` runs in `npm run build`. A Vercel *production* build needs every required setting in `.env.example`. A Vercel *preview* build only needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, so a preview can't look healthy while sign-in is broken, and no production-only integration is demanded. Local and CI builds skip the check.
 
 ### 4. Email
 
@@ -250,7 +282,6 @@ Left in place on purpose. None of it is used by the app.
 | --- | --- |
 | `.continue/` | **Check it first. It may hold an API key.** `.continue/agents/new-config.yaml` is tracked in git and on `origin`, since commit `ae88835`. The two earlier audits disagree: one reported a plaintext provider key in it, the other saw no secret, and it was not opened for this write-up. Only you can settle it. If there is a key, revoke it at the provider, since deleting the file doesn't remove it from history, and consider rewriting history. Either way, untrack the folder and add it to `.gitignore` |
 | `.lucky/` | Tracked tool leftovers. Delete |
-| `architecture-audit.txt` | Tracked old notes. Delete |
 | `database/legacy/` | Old SQL kept for reference. Never run it. Delete when you no longer want it |
 | `tests/_tmp/` | One leftover scratch file that tests nothing. Delete |
 | `eslint.config.mjs` | References packages that aren't installed, so linting doesn't run. Install ESLint and add a CI step, or delete the file |

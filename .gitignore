@@ -50,3 +50,9 @@ supabase/.temp/
 
 # Local AI tool settings. They can hold provider keys, so they never belong in the repo.
 .continue/
+
+# Local-only artefacts that hold credentials or personal contact data. Never commit them.
+/fix-pw.js
+/contractor_leads*.csv
+/vitest-fail.txt
+/architecture-audit.txt
