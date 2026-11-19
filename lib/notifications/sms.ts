@@ -19,8 +19,8 @@ export async function sendSMSNotification({ to, message }: { to: string; message
       to,
     });
     return { success: true, sid: result.sid };
-  } catch (err: any) {
-    console.error('Failed to send SMS:', err.message);
-    return { success: false, error: err.message };
+  } catch (err) {
+    console.error('Failed to send SMS:', err instanceof Error ? err.message : 'unknown error');
+    return { success: false, error: 'Could not send the text message' };
   }
 }

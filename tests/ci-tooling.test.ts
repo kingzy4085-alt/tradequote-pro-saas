@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { checkProductionEnv, run } from '../scripts/check-env.ts';
+import { checkPreviewEnv, checkProductionEnv, run } from '../scripts/check-env.ts';
 import { migrationProblems, MIGRATIONS_DIR } from '../scripts/check-migrations.ts';
 
 const GOOD = {
@@ -13,6 +13,10 @@ const GOOD = {
   STRIPE_WEBHOOK_SECRET: 'whsec_value',
   STRIPE_PRICE_ID: 'price_value',
   ANTHROPIC_API_KEY: 'anthropic-value',
+  GEMINI_API_KEY: 'gemini-value',
+  TWILIO_ACCOUNT_SID: 'AC-sid-value',
+  TWILIO_AUTH_TOKEN: 'twilio-token-value',
+  TWILIO_PHONE_NUMBER: '+15550100',
   CRON_SECRET: 'c'.repeat(32),
   UNSUBSCRIBE_SECRET: 'u'.repeat(32),
   RESEND_API_KEY: 'resend-value',
@@ -21,6 +25,8 @@ const GOOD = {
   BUSINESS_MAILING_ADDRESS: 'PO Box 1, Regina SK',
   OPERATOR_EMAIL: 'ops@tradequote.example',
 };
+
+const PREVIEW = { NEXT_PUBLIC_SUPABASE_URL: GOOD.NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY: GOOD.NEXT_PUBLIC_SUPABASE_ANON_KEY };
 
 describe('check-env', () => {
   it('passes complete production settings', () => {
@@ -31,7 +37,7 @@ describe('check-env', () => {
     const { problems } = checkProductionEnv({});
     expect(problems).toContain('STRIPE_SECRET_KEY is not set');
     expect(problems).toContain('CRON_SECRET is not set');
-    expect(problems).toHaveLength(13);
+    expect(problems).toHaveLength(14);
   });
 
   it.each([
@@ -61,9 +67,30 @@ describe('check-env', () => {
     expect(warnings).toHaveLength(2);
   });
 
+  it('requires Gemini on production', () => {
+    expect(checkProductionEnv({ ...GOOD, GEMINI_API_KEY: undefined }).problems).toEqual(['GEMINI_API_KEY is not set']);
+  });
+
+  it('refuses a partial Twilio setup, and only warns when Twilio is absent', () => {
+    const partial = checkProductionEnv({ ...GOOD, TWILIO_AUTH_TOKEN: undefined });
+    expect(partial.problems).toHaveLength(1);
+    expect(partial.problems[0]).toContain('TWILIO_AUTH_TOKEN');
+    const none = checkProductionEnv({ ...GOOD, TWILIO_ACCOUNT_SID: undefined, TWILIO_AUTH_TOKEN: undefined, TWILIO_PHONE_NUMBER: undefined });
+    expect(none.problems).toEqual([]);
+    expect(none.warnings).toHaveLength(1);
+  });
+
+  it('a preview build needs only the public Supabase settings', () => {
+    expect(checkPreviewEnv(PREVIEW)).toEqual({ problems: [], warnings: [] });
+    expect(checkPreviewEnv({}).problems).toEqual(['NEXT_PUBLIC_SUPABASE_URL is not set', 'NEXT_PUBLIC_SUPABASE_ANON_KEY is not set']);
+    expect(checkPreviewEnv({ ...PREVIEW, NEXT_PUBLIC_SUPABASE_URL: 'http://localhost:54321' }).problems).toHaveLength(1);
+    expect(run({ VERCEL_ENV: 'preview' }, [])).toBe(1);
+    expect(run({ VERCEL_ENV: 'preview', NEXT_PUBLIC_SUPABASE_URL: PREVIEW.NEXT_PUBLIC_SUPABASE_URL }, [])).toBe(1);
+  });
+
   it('only runs for a Vercel production build, or when forced', () => {
     expect(run({}, [])).toBe(0);
-    expect(run({ VERCEL_ENV: 'preview' }, [])).toBe(0);
+    expect(run({ VERCEL_ENV: 'preview', ...PREVIEW }, [])).toBe(0);
     expect(run({ VERCEL_ENV: 'production' }, [])).toBe(1);
     expect(run({}, ['--force'])).toBe(1);
     expect(run({ ...GOOD, VERCEL_ENV: 'production' }, [])).toBe(0);
@@ -85,7 +112,7 @@ describe('check-env', () => {
     const example = Object.fromEntries(
       [...readFileSync('.env.example', 'utf8').matchAll(/^([A-Z_0-9]+)=(.*?)\r?$/gm)].map((m) => [m[1], m[2]]),
     );
-    expect(checkProductionEnv(example).problems).toHaveLength(13);
+    expect(checkProductionEnv(example).problems).toHaveLength(14);
   });
 });
 

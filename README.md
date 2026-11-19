@@ -83,6 +83,15 @@ The old scripts in `database/legacy/` are for reference only. Don't run them.
 | Change Email Address | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
 | Reset Password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
 
+**Password reset flow.** Mail security scanners open every link in an email before the person does, and a reset token works once, so a link that signed you in on first open would be spent by the scanner. Reset links therefore take two steps:
+
+1. The Reset Password template link (`/auth/callback?token_hash=...&type=recovery`, above) is opened with a GET. For `type=recovery` the route does **not** verify the token. It redirects (303) to `/auth/confirm` with the same `token_hash`, `type` and a safe `next`.
+2. `/auth/confirm` shows a **Continue** button inside a form. Scanners don't press buttons, so the token is still unused.
+3. Pressing Continue sends `POST /auth/callback`. That is the only place the token is verified (`verifyOtp`), and it works on any device. It refuses a cross-origin `Origin`, and on success signs this browser in and redirects (303) to `/update-password`.
+4. `/update-password` lets the person choose a new password. An expired, used or malformed link goes to `/login` with a plain-language message, never Supabase's own error text.
+
+The Reset Password template must contain exactly the placeholder link shown in the table (`{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery`). A template that still uses `{{ .ConfirmationURL }}` sends people through Supabase's own verify link, which a scanner can spend. Updating the template is a manual step in the Supabase dashboard; this repository does not change it. Other template types (confirm, invite, magic link, email change) are still verified directly on the GET.
+
 ### 2. Stripe
 
 Create a Product with a recurring monthly **CAD** Price at the figure in `lib/plan.ts` and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.
@@ -90,6 +99,10 @@ Create a Product with a recurring monthly **CAD** Price at the figure in `lib/pl
 ### 3. Claude API
 
 Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Without it the assistant says it isn't configured and everything else works.
+
+### 3b. Gemini and Twilio
+
+Voice-to-estimate and scope extraction use Google Gemini: set `GEMINI_API_KEY`. A Vercel production build fails without it, and without it those two features answer 503. Text messages to clients use Twilio and are optional: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` together or not at all (a partial set fails the production build; none prints a warning). Vercel **Preview** builds check only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, so a Preview can't deploy with sign-in broken.
 
 ### 4. Email
 
@@ -250,7 +263,6 @@ Left in place on purpose. None of it is used by the app.
 | --- | --- |
 | `.continue/` | **Check it first. It may hold an API key.** `.continue/agents/new-config.yaml` is tracked in git and on `origin`, since commit `ae88835`. The two earlier audits disagree: one reported a plaintext provider key in it, the other saw no secret, and it was not opened for this write-up. Only you can settle it. If there is a key, revoke it at the provider, since deleting the file doesn't remove it from history, and consider rewriting history. Either way, untrack the folder and add it to `.gitignore` |
 | `.lucky/` | Tracked tool leftovers. Delete |
-| `architecture-audit.txt` | Tracked old notes. Delete |
 | `database/legacy/` | Old SQL kept for reference. Never run it. Delete when you no longer want it |
 | `tests/_tmp/` | One leftover scratch file that tests nothing. Delete |
 | `eslint.config.mjs` | References packages that aren't installed, so linting doesn't run. Install ESLint and add a CI step, or delete the file |

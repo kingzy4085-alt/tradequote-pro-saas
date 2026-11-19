@@ -1,7 +1,9 @@
-// Checks a production deployment has its settings before Vercel builds it, so a missing key fails the
-// deploy instead of the first customer's click. Reports names and rules only, never a value.
+// Checks a Vercel deployment has its settings before it builds, so a missing key fails the deploy
+// instead of the first customer's click. Reports names and rules only, never a value.
 //
-// Runs from `npm run build`. It does nothing unless VERCEL_ENV=production. To try it by hand:
+// Runs from `npm run build`. Production checks every integration. Preview checks only the public
+// Supabase settings sign-in needs, so a Preview cannot look healthy while every login is broken.
+// Anything else (local builds, CI) skips. To try the production check by hand:
 //   node --env-file=.env.local scripts/check-env.ts --force
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -31,6 +33,11 @@ const atLeast =
   (value) =>
     value.length >= length ? null : `must be at least ${length} characters`;
 
+// What sign-in needs in the browser, and so what a Preview build needs too
+const PUBLIC_SUPABASE = ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+
+const TWILIO = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER'];
+
 const REQUIRED: Array<{ name: string; rule?: Rule }> = [
   { name: 'NEXT_PUBLIC_SUPABASE_URL', rule: publicHttps },
   { name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY' },
@@ -40,6 +47,8 @@ const REQUIRED: Array<{ name: string; rule?: Rule }> = [
   { name: 'STRIPE_WEBHOOK_SECRET', rule: startsWith('whsec_') },
   { name: 'STRIPE_PRICE_ID', rule: startsWith('price_') },
   { name: 'ANTHROPIC_API_KEY' },
+  // Voice-to-estimate and scope extraction ship in the estimate editor, so they are always on
+  { name: 'GEMINI_API_KEY' },
   { name: 'CRON_SECRET', rule: atLeast(32) },
   { name: 'RESEND_API_KEY' },
   { name: 'EMAIL_FROM' },
@@ -50,9 +59,9 @@ const REQUIRED: Array<{ name: string; rule?: Rule }> = [
 // The values .env.example ships with, which would otherwise pass as "set"
 const isPlaceholder = (value: string) => value.includes('...') || /your[-_]/i.test(value);
 
-export function checkProductionEnv(env: Env): { problems: string[]; warnings: string[] } {
+function checkRequired(env: Env, required: Array<{ name: string; rule?: Rule }>): string[] {
   const problems: string[] = [];
-  for (const { name, rule } of REQUIRED) {
+  for (const { name, rule } of required) {
     const value = env[name]?.trim();
     if (!value) {
       problems.push(`${name} is not set`);
@@ -63,11 +72,28 @@ export function checkProductionEnv(env: Env): { problems: string[]; warnings: st
       if (broken) problems.push(`${name} ${broken}`);
     }
   }
+  return problems;
+}
+
+/** Preview builds: only the public Supabase settings, which sign-in cannot work without. */
+export function checkPreviewEnv(env: Env): { problems: string[]; warnings: string[] } {
+  return { problems: checkRequired(env, REQUIRED.filter((r) => PUBLIC_SUPABASE.includes(r.name))), warnings: [] };
+}
+
+export function checkProductionEnv(env: Env): { problems: string[]; warnings: string[] } {
+  const problems = checkRequired(env, REQUIRED);
   if (env.SUPABASE_SERVICE_ROLE_KEY && env.SUPABASE_SERVICE_ROLE_KEY === env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     problems.push('SUPABASE_SERVICE_ROLE_KEY must not be the same as NEXT_PUBLIC_SUPABASE_ANON_KEY');
   }
 
+  // Text messages are optional, but half a setup would fail silently on the first send
+  const twilioSet = TWILIO.filter((name) => env[name]?.trim());
+  if (twilioSet.length > 0 && twilioSet.length < TWILIO.length) {
+    for (const name of TWILIO.filter((n) => !twilioSet.includes(n))) problems.push(`${name} is not set, but other TWILIO_ settings are, so text messages would fail`);
+  }
+
   const warnings: string[] = [];
+  if (twilioSet.length === 0) warnings.push('TWILIO_ settings are not set, so text messages to clients are switched off');
   if (!env.UNSUBSCRIBE_SECRET) warnings.push('UNSUBSCRIBE_SECRET is not set, so CRON_SECRET signs unsubscribe links');
   else if (env.UNSUBSCRIBE_SECRET === env.CRON_SECRET) warnings.push('UNSUBSCRIBE_SECRET is the same as CRON_SECRET');
   if (!env.OPERATOR_EMAIL && !env.EMAIL_REPLY_TO) warnings.push('OPERATOR_EMAIL is not set, so nobody is emailed when the daily automation fails');
@@ -75,17 +101,18 @@ export function checkProductionEnv(env: Env): { problems: string[]; warnings: st
 }
 
 export function run(env: Env, args: string[]): number {
-  if (env.VERCEL_ENV !== 'production' && !args.includes('--force')) {
-    console.log('check-env: skipped, this is not a Vercel production build.');
+  const preview = env.VERCEL_ENV === 'preview' && !args.includes('--force');
+  if (env.VERCEL_ENV !== 'production' && !preview && !args.includes('--force')) {
+    console.log('check-env: skipped, this is not a Vercel production or preview build.');
     return 0;
   }
-  const { problems, warnings } = checkProductionEnv(env);
+  const { problems, warnings } = preview ? checkPreviewEnv(env) : checkProductionEnv(env);
   for (const warning of warnings) console.warn(`check-env warning: ${warning}`);
   if (problems.length === 0) {
-    console.log('check-env: production settings look right.');
+    console.log(`check-env: ${preview ? 'preview' : 'production'} settings look right.`);
     return 0;
   }
-  console.error('check-env: this production build has settings to fix. See .env.example and the README.');
+  console.error(`check-env: this ${preview ? 'preview' : 'production'} build has settings to fix. See .env.example and the README.`);
   for (const problem of problems) console.error(`  - ${problem}`);
   return 1;
 }
