@@ -711,15 +711,22 @@ async function inviteFlow({ owner, pm, companyId }) {
   const target = new URL(link);
   if (!['127.0.0.1', 'localhost'].includes(target.hostname)) throw new Error('Refusing to follow an invite link that leaves this computer');
 
-  // Same app, whichever local name the Site URL used
-  const landed = await fetch(`${S.app}${target.pathname}${target.search}`, { redirect: 'manual' });
+  // Same app, whichever local name the Site URL used. Reset links stop at /auth/confirm
+  // until its button is pressed, so press it: POST the same fields back.
+  const follow = () =>
+    target.searchParams.get('type') === 'recovery'
+      ? fetch(`${S.app}/auth/callback`, { method: 'POST', redirect: 'manual', headers: { origin: S.app }, body: new URLSearchParams([...target.searchParams].filter(([k]) => ['token_hash', 'type', 'next'].includes(k))) })
+      : fetch(`${S.app}${target.pathname}${target.search}`, { redirect: 'manual' });
+  const opened = target.searchParams.get('type') === 'recovery' ? await fetch(`${S.app}${target.pathname}${target.search}`, { redirect: 'manual' }) : null;
+  if (opened) check('a reset link waits for a button press', /\/auth\/confirm\?/.test(opened.headers.get('location') ?? ''), opened.headers.get('location'));
+  const landed = await follow();
   const place = landed.headers.get('location') ?? '';
   check('the link goes to choosing a password first, then onboarding', /\/update-password\?next=%2Fonboarding/.test(place), `${landed.status} ${place}`);
   const jar = landed.headers.getSetCookie().map((c) => c.split(';')[0]).filter((c) => !c.endsWith('='));
   check('the link signed them in', jar.some((c) => c.includes('auth-token')));
   const invited = { tag: 'invited', name: 'Nina New', email, cookie: jar.join('; '), db: anonClient() };
 
-  const reused = await fetch(`${S.app}${target.pathname}${target.search}`, { redirect: 'manual' });
+  const reused = await follow();
   check('the link only works once', /\/login/.test(reused.headers.get('location') ?? ''), reused.headers.get('location'));
 
   const page = await fetch(`${S.app}/update-password?next=%2Fonboarding`, { headers: { cookie: invited.cookie }, redirect: 'manual' });
