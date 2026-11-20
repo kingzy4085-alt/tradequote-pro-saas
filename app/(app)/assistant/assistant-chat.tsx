@@ -26,11 +26,12 @@ export default function AssistantChat({ province }: { province: string }) {
   const endRef = useRef<HTMLDivElement>(null);
 
   const suggestions = [
+    'What size copper for a 60 A subpanel 40 m away?',
+    'Price a 200 A service upgrade in Calgary',
+    'Draft the lines for 12 pot lights in a finished basement',
+    'Burdened cost and charge-out rate for a journeyperson electrician in Ontario',
     `What's the minimum working clearance in front of a 600 V MCC under the CEC as adopted in ${province}?`,
-    'How do I size a feeder for three 50 hp motors at 600 V?',
-    'What should a LOTO procedure for a conveyor drive include?',
     'Which of our estimates are still in draft?',
-    `How does holdback work on progress billing in ${province}?`,
   ];
 
   useEffect(() => {

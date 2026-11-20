@@ -50,3 +50,6 @@ supabase/.temp/
 
 # Local AI tool settings. They can hold provider keys, so they never belong in the repo.
 .continue/
+
+# Worktrees made for AI coding agents
+/.claude/worktrees/
