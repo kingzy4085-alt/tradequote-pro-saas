@@ -1,69 +1,56 @@
-// Every calculator, in the order the tools page shows them. Consumers use only the exports below.
+// Every calculator, in the order the tools page shows them. Consumers use only the exports below:
+// CALCULATORS, getCalculator, defaultInput, runCalculator, inputSchema and numberInput.
 //
-// CONTRACT STAGE: one worked example (concrete slab) shows the pattern. The full set of electrical,
-// building, HVAC and plumbing calculators replaces this list; these exports and their behaviour stay.
-import type { CalcField, CalcInput, CalcResult, CalcValue, Calculator } from './types';
+// Order: electrical design, electrical takeoff, building takeoff, then mechanical.
+import type { CalcInput, CalcValue, Calculator } from './types';
+import { boxFill } from './calculators/box-fill';
+import { concreteFootingWall } from './calculators/concrete-footing-wall';
+import { concretePiles } from './calculators/concrete-piles';
+import { concreteSlab } from './calculators/concrete-slab';
+import { conductorSize } from './calculators/conductor-size';
+import { conduitFill } from './calculators/conduit-fill';
+import { drywall } from './calculators/drywall';
+import { dwellingLoad } from './calculators/dwelling-load';
+import { evChargerCircuit } from './calculators/ev-charger-circuit';
+import { flooring } from './calculators/flooring';
+import { heatLoss } from './calculators/heat-loss';
+import { insulation } from './calculators/insulation';
+import { lightingLayout } from './calculators/lighting-layout';
+import { motorCircuit } from './calculators/motor-circuit';
+import { paint } from './calculators/paint';
+import { residentialWiringTakeoff } from './calculators/residential-wiring-takeoff';
+import { roofing } from './calculators/roofing';
+import { transformerSizing } from './calculators/transformer-sizing';
+import { voltageDrop } from './calculators/voltage-drop';
+import { wallFraming } from './calculators/wall-framing';
+import { waterHeaterSizing } from './calculators/water-heater-sizing';
 
 export type * from './types';
+export { numberInput } from './common';
 
-/** A number from the input, clamped to the field's limits, with a warning when it had to change. */
-export function numberInput(input: CalcInput, field: CalcField, warnings: string[]): number {
-  const raw = input[field.key];
-  let x = typeof raw === 'number' ? raw : Number(raw);
-  if (!Number.isFinite(x)) {
-    x = Number(field.default);
-    if (raw !== undefined && raw !== '') warnings.push(`${field.label} was not a number, so ${x} was used.`);
-  }
-  if (field.min !== undefined && x < field.min) {
-    warnings.push(`${field.label} was raised to the minimum of ${field.min}.`);
-    x = field.min;
-  }
-  if (field.max !== undefined && x > field.max) {
-    warnings.push(`${field.label} was lowered to the maximum of ${field.max}.`);
-    x = field.max;
-  }
-  return x;
-}
-
-const round = (x: number, dp = 2) => Math.round(x * 10 ** dp) / 10 ** dp;
-
-const slabFields: CalcField[] = [
-  { key: 'length', label: 'Length', type: 'number', unit: 'ft', default: 20, min: 0, max: 1000, step: 0.5 },
-  { key: 'width', label: 'Width', type: 'number', unit: 'ft', default: 20, min: 0, max: 1000, step: 0.5 },
-  { key: 'thickness', label: 'Thickness', type: 'number', unit: 'in', default: 4, min: 2, max: 24, step: 0.5 },
-  { key: 'waste', label: 'Waste allowance', type: 'number', unit: '%', default: 8, min: 0, max: 30, step: 1 },
+export const CALCULATORS: readonly Calculator[] = [
+  voltageDrop,
+  conductorSize,
+  conduitFill,
+  boxFill,
+  motorCircuit,
+  dwellingLoad,
+  residentialWiringTakeoff,
+  evChargerCircuit,
+  transformerSizing,
+  lightingLayout,
+  concreteSlab,
+  concreteFootingWall,
+  concretePiles,
+  drywall,
+  paint,
+  wallFraming,
+  roofing,
+  flooring,
+  insulation,
+  heatLoss,
+  waterHeaterSizing,
 ];
-
-const concreteSlab: Calculator = {
-  id: 'concrete-slab',
-  name: 'Concrete slab calculator',
-  trade: 'concrete',
-  category: 'Takeoff',
-  summary: 'Cubic metres and yards of ready-mix for a slab, with waste and finishing labour.',
-  fields: slabFields,
-  keywords: ['concrete', 'slab', 'ready-mix', 'cubic yards', 'cubic metres'],
-  run(input: CalcInput): CalcResult {
-    const warnings: string[] = [];
-    const [length, width, thickness, waste] = slabFields.map((f) => numberInput(input, f, warnings));
-    const cubicFeet = length * width * (thickness / 12);
-    const m3 = cubicFeet * 0.0283168 * (1 + waste / 100);
-    const ordered = Math.ceil(m3 * 4) / 4; // plants batch in quarter cubic metres
-    const area = length * width;
-    return {
-      summary: [
-        { label: 'Concrete to order', value: `${ordered} m³ (${round(ordered * 1.30795, 2)} yd³)`, emphasis: true },
-        { label: 'Slab area', value: `${round(area, 1)} sq ft` },
-        { label: 'Volume before waste', value: `${round(cubicFeet * 0.0283168, 2)} m³` },
-      ],
-      values: { area_sqft: round(area, 2), volume_m3: round(m3, 3), order_m3: ordered },
-      takeoff: ordered > 0 ? [{ code: 'CONC-25MPA', description: 'Ready-mix concrete 25 MPa, slab', quantity: ordered, unit: 'm3' }] : [],
-      warnings,
-      references: ['Volume = length x width x thickness, plus waste; ordered in 0.25 m³ steps'],
-    };
-  },
-};
-
-export const CALCULATORS: readonly Calculator[] = [concreteSlab];
 
 export function getCalculator(id: string): Calculator | undefined {
   return CALCULATORS.find((c) => c.id === id);
@@ -75,7 +62,7 @@ export function defaultInput(calc: Calculator): CalcInput {
 }
 
 /** Runs a calculator by id, or returns null for an unknown id. */
-export function runCalculator(id: string, input: CalcInput): CalcResult | null {
+export function runCalculator(id: string, input: CalcInput): ReturnType<Calculator['run']> | null {
   const calc = getCalculator(id);
   return calc ? calc.run({ ...defaultInput(calc), ...input }) : null;
 }
