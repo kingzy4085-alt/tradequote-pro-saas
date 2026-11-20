@@ -146,7 +146,7 @@ export async function buildCompanyExport(
 export function exportFileName(companyName: string, now: Date = new Date()): string {
   const slug = companyName
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')

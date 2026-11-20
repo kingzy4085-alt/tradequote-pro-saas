@@ -1,5 +1,6 @@
 'use client';
 
+import { VoiceEstimateRecorder } from '@/components/estimates/VoiceEstimateRecorder';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -277,6 +278,12 @@ export default function EstimateEditor({
 
   return (
     <>
+      {/* Scope documents and drawings go through the AI draft panel below the lines; voice notes start here */}
+      {canEditLines && (
+        <div className="mb-6">
+          <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />
+        </div>
+      )}
       <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}

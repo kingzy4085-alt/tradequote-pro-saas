@@ -10,5 +10,5 @@ export default async function OnboardingPage() {
   if (result.status === 'ok') redirect('/');
 
   const { data: invitations } = await result.supabase.rpc('pending_invitations');
-  return <OnboardingForm email={result.user.email ?? ''} invitations={(invitations ?? []) as { token: string; company_name: string; role: string }[]} />;
+  return <OnboardingForm email={result.user.email ?? ''} invitations={(invitations ?? []) as { token: string; name: string; role: string }[]} />;
 }

@@ -115,10 +115,17 @@ describe('auth callback', () => {
   });
 
   it('sends password resets to choose a password', async () => {
-    expect(await target(call('token_hash=abc&type=recovery').response)).toBe('https://app.test/update-password');
     expect(await target(call('code=xyz&type=recovery').response)).toBe('https://app.test/update-password');
     expect(await target(call('code=xyz&next=/update-password').response)).toBe('https://app.test/update-password');
-    expect(await target(call('token_hash=abc&type=recovery&next=/update-password').response)).toBe('https://app.test/update-password');
+  });
+
+  it('does not spend a reset token_hash on a GET, so mail scanners cannot use it up', async () => {
+    const plain = call('token_hash=abc&type=recovery');
+    expect(await target(plain.response)).toBe('https://app.test/auth/confirm?token_hash=abc&type=recovery');
+    expect(plain.verifyOtp).not.toHaveBeenCalled();
+    const withNext = call('token_hash=abc&type=recovery&next=/update-password');
+    expect(await target(withNext.response)).toBe('https://app.test/auth/confirm?token_hash=abc&type=recovery&next=%2Fupdate-password');
+    expect(withNext.verifyOtp).not.toHaveBeenCalled();
   });
 
   it('never redirects off-site', async () => {

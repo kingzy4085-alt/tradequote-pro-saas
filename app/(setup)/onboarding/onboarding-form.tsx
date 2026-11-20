@@ -8,7 +8,7 @@ import { ROLE_LABEL, isRole } from '@/lib/roles';
 
 interface Invitation {
   token: string;
-  company_name: string;
+  name: string;
   role: string;
 }
 
@@ -62,7 +62,7 @@ export default function OnboardingForm({ email, invitations }: { email: string; 
             {invitations.map((inv) => (
               <div key={inv.token} className="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-xl p-4">
                 <div>
-                  <p className="font-medium text-white">{inv.company_name}</p>
+                  <p className="font-medium text-white">{inv.name}</p>
                   <p className="text-xs text-slate-400">as {isRole(inv.role) ? ROLE_LABEL[inv.role] : inv.role}</p>
                 </div>
                 <Button disabled={loading} onClick={() => submit({ action: 'accept', token: inv.token })}>
