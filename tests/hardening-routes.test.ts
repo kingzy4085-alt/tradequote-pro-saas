@@ -220,9 +220,16 @@ describe('middleware', () => {
     expect(res.headers.get('location')).toBe(`https://app.test/login?next=${encodeURIComponent('/estimates')}`);
   });
 
-  it('signed-out visitors to the root go to pricing; other pages go to login; API gets 401', async () => {
+  it('signed-out visitors to the root see the landing page at the same URL; other pages go to login; API gets 401', async () => {
     stubAuth();
-    expect((await middleware(request('/'))).headers.get('location')).toBe('https://app.test/pricing');
+    const root = await middleware(request('/'));
+    expect(root.headers.get('location')).toBeNull();
+    expect(root.headers.get('x-middleware-rewrite')).toBe('https://app.test/welcome');
+    // A stale session cookie that Supabase rejects is signed out too
+    stubAuth({ user: false });
+    const stale = await middleware(request('/', { [COOKIE]: session(jwt(), 4_000_000_000) }));
+    expect(stale.headers.get('x-middleware-rewrite')).toBe('https://app.test/welcome');
+    stubAuth();
     expect((await middleware(request('/estimates?x=1'))).headers.get('location')).toBe(`https://app.test/login?next=${encodeURIComponent('/estimates?x=1')}`);
     expect((await middleware(request('/api/modules/rfis'))).status).toBe(401);
   });
@@ -273,7 +280,10 @@ describe('robots and sitemap', () => {
     const r = robots();
     expect(r.sitemap).toBe('https://app.example.ca/sitemap.xml');
     expect(r.rules).toMatchObject({ disallow: '/' });
-    expect(sitemap().map((s) => s.url)).toEqual(['https://app.example.ca/pricing', 'https://app.example.ca/about', 'https://app.example.ca/legal/terms', 'https://app.example.ca/legal/privacy']);
+    // The public marketing site is listed too: the landing page, the demo and every free calculator
+    const urls = sitemap().map((s) => s.url);
+    for (const path of ['', '/demo', '/tools', '/pricing', '/about', '/legal/terms', '/legal/privacy']) expect(urls).toContain(`https://app.example.ca${path}`);
+    for (const u of urls) expect(u).toMatch(/^https:\/\/app\.example\.ca(\/(demo|tools|pricing|about|legal\/(terms|privacy))(\/[a-z0-9-]+)?)?$/);
   });
 });
 

@@ -1,0 +1,39 @@
+/* Public site only: the few things Tailwind utilities cannot express. */
+.tq-hazard {
+  background-image: repeating-linear-gradient(-45deg, #f59e0b 0 10px, #0f172a 10px 20px);
+}
+.tq-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+@keyframes tq-flash {
+  0% { color: #fde68a; text-shadow: 0 0 24px rgba(245, 158, 11, 0.55); }
+  100% { color: inherit; text-shadow: none; }
+}
+@keyframes tq-pulse-ring {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes tq-stamp {
+  0% { transform: rotate(-8deg) scale(1.8); opacity: 0; }
+  60% { transform: rotate(-8deg) scale(0.94); opacity: 1; }
+  100% { transform: rotate(-8deg) scale(1); opacity: 1; }
+}
+@keyframes tq-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tq-flash { animation: tq-flash 900ms ease-out; }
+  .tq-ring { animation: tq-pulse-ring 900ms ease-out; }
+  .tq-stamp { animation: tq-stamp 420ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+  .tq-rise { animation: tq-rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .tq-rise-2 { animation-delay: 120ms; }
+  .tq-rise-3 { animation-delay: 240ms; }
+}
+.tq-range { accent-color: #f59e0b; width: 100%; }
+@keyframes tq-fill { from { width: 0; } to { width: 100%; } }
+.tq-fill { animation: tq-fill var(--tq-dur, 3s) linear both; }
+@media (prefers-reduced-motion: reduce) { .tq-fill { animation: none; width: 100%; } }

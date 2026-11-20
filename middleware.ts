@@ -12,6 +12,11 @@ const PUBLIC_PATHS = [
   '/api/stripe/webhook',
   '/pricing',
   '/about',
+  '/welcome',
+  '/demo',
+  '/tools',
+  '/tools/',
+  '/opengraph-image',
   '/api/leads',
   '/api/health',
   '/api/cron/',
@@ -26,6 +31,23 @@ const PUBLIC_PATHS = [
 // These carry their own authentication (or none) and never read a session, so
 // they must keep working even when Supabase is unset or down.
 const NO_SESSION_PATHS = ['/api/health', '/api/stripe/webhook', '/robots.txt', '/sitemap.xml'];
+
+// The public marketing site. These pages never read a session, so they render even when
+// Supabase is unset or down and the site can be deployed on its own.
+const MARKETING_PATHS = ['/welcome', '/demo', '/tools', '/pricing', '/about', '/opengraph-image'];
+
+export function isMarketingPath(pathname: string): boolean {
+  return MARKETING_PATHS.includes(pathname) || pathname.startsWith('/tools/') || pathname.startsWith('/demo/');
+}
+
+/** Shows the landing page at the root URL, keeping any session cookies just rotated on `from`. */
+function landingRewrite(request: NextRequest, from?: NextResponse): NextResponse {
+  const landing = request.nextUrl.clone();
+  landing.pathname = '/welcome';
+  const rewrite = NextResponse.rewrite(landing);
+  if (from) for (const cookie of from.cookies.getAll()) rewrite.cookies.set(cookie);
+  return rewrite;
+}
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => (p.endsWith('/') ? pathname.startsWith(p) : pathname === p));
@@ -43,10 +65,16 @@ export async function middleware(request: NextRequest) {
   // so it is closed here rather than left reachable.
   if (request.nextUrl.pathname.startsWith('/_next/image')) return new NextResponse('Not found', { status: 404 });
   if (NO_SESSION_PATHS.includes(request.nextUrl.pathname)) return NextResponse.next();
+  if (isMarketingPath(request.nextUrl.pathname)) return NextResponse.next();
+
+  // A visitor with no session cookie at all is signed out: show the landing page without waiting on Supabase
+  const hasSessionCookie = request.cookies.getAll().some((c) => c.name.startsWith('sb-'));
+  if (request.nextUrl.pathname === '/' && !hasSessionCookie) return landingRewrite(request);
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
+    if (request.nextUrl.pathname === '/') return landingRewrite(request);
     return new NextResponse('TradeQuote PRO is not configured: set the Supabase variables from .env.example.', { status: 500 });
   }
 
@@ -79,11 +107,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname, search } = request.nextUrl;
   if (!user && pathname === '/') {
-    // A signed-out visitor to the root is most likely a prospect
-    const pricing = request.nextUrl.clone();
-    pricing.pathname = '/pricing';
-    pricing.search = '';
-    return redirectWithCookies(pricing, response);
+    // A signed-out visitor to the root is most likely a prospect: the URL stays /
+    return landingRewrite(request, response);
   }
   if (!user && !isPublicPath(pathname)) {
     if (pathname.startsWith('/api/')) {
