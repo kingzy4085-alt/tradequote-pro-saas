@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonError, readJson, requireApi } from '@/lib/api';
-import { ChatRequest, SYSTEM_PROMPT, capHistory, collectSources, contextPrompt, recordSearchTool, runRecordSearch, type Source } from '@/lib/assistant';
+import { ChatRequest, SYSTEM_PROMPT, assistantTools, capHistory, collectSources, contextPrompt, runAssistantTool, type Source } from '@/lib/assistant';
 import { env } from '@/lib/env';
 import { provinceTimeZone } from '@/lib/provinces';
 
@@ -8,6 +8,13 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const MAX_TURNS = 6;
+
+const TOOL_STATUS: Record<string, string> = {
+  search_company_records: 'Checking your company records…',
+  lookup_costs: 'Looking up prices…',
+  labour_rates: 'Working out labour rates…',
+  run_calculator: 'Running the calculator…',
+};
 
 // Streams newline-delimited JSON events to the chat page:
 // {type:"text",text} {type:"status",text} {type:"sources",items} {type:"error",text} {type:"done"}
@@ -36,7 +43,7 @@ export async function POST(request: Request) {
 
   const client = new Anthropic();
   const tools: Anthropic.Beta.BetaToolUnion[] = [
-    recordSearchTool(ctx.role),
+    ...assistantTools(ctx.role),
     {
       type: 'web_search_20260209',
       name: 'web_search',
@@ -76,7 +83,7 @@ export async function POST(request: Request) {
               send({ type: 'text', text: event.delta.text });
             } else if (event.type === 'content_block_start') {
               if (event.content_block.type === 'server_tool_use') send({ type: 'status', text: 'Searching the web…' });
-              if (event.content_block.type === 'tool_use') send({ type: 'status', text: 'Checking your company records…' });
+              if (event.content_block.type === 'tool_use') send({ type: 'status', text: TOOL_STATUS[event.content_block.name] ?? 'Working…' });
             }
           }
           const message = await stream.finalMessage();
@@ -100,10 +107,7 @@ export async function POST(request: Request) {
           const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
           for (const block of message.content) {
             if (block.type !== 'tool_use') continue;
-            const out =
-              block.name === 'search_company_records'
-                ? await runRecordSearch(ctx.supabase, ctx.role, block.input)
-                : { content: `Unknown tool ${block.name}`, isError: true };
+            const out = await runAssistantTool({ supabase: ctx.supabase, role: ctx.role, companyId: ctx.company.id, province: ctx.company.province }, block.name, block.input);
             results.push({ type: 'tool_result', tool_use_id: block.id, content: out.content, is_error: out.isError });
           }
           messages.push({ role: 'assistant', content: message.content });
