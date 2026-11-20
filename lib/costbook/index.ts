@@ -1,33 +1,27 @@
 // The cost engine's public surface. Everything outside lib/costbook imports from here, so these
 // exports are a contract: keep every name and signature, add freely.
 //
-// CONTRACT STAGE: the catalog below prices every core item at 0 and the wage table is a national
-// placeholder. The researched catalog, regional factors and provincial labour data replace them;
-// the functions and their behaviour stay.
+// The data lives next to this file: catalog-*.ts (researched prices), regions.ts (regional factors),
+// labour.ts and labour-data.ts (wages and burden), tax.ts (sales tax). This file holds the functions
+// that put them together.
 import type { EstimateLine } from '@/lib/estimate-math';
-import { CORE_ITEMS } from './codes';
-import type { CatalogItem, CompanyPrice, LabourClass, LabourCost, PricedLine, Region, SalesTax, ShopType, TakeoffLine, Trade } from './types';
+import { BUILDING_ITEMS } from './catalog-building';
+import { ELECTRICAL_ITEMS } from './catalog-electrical';
+import { MECHANICAL_ITEMS } from './catalog-mechanical';
+import { REGIONS } from './regions';
+import { salesTax } from './tax';
+import type { CatalogItem, CompanyPrice, PricedLine, Region, TakeoffLine, Trade } from './types';
 
 export type * from './types';
 export { CORE_ITEMS, CORE_CODES } from './codes';
+export { REGIONS } from './regions';
+export { salesTax } from './tax';
+export { billingRate, labourCost, BILLING_DEFAULTS, annualContributions, STATUTORY_2026, APPRENTICE_PCT } from './labour';
 
 /** Month the reference prices were last checked. */
 export const COSTBOOK_AS_OF = '2026-11';
 
-export const CATALOG: readonly CatalogItem[] = Object.values(CORE_ITEMS).map((c) => ({
-  code: c.code,
-  trade: c.trade,
-  category: c.trade,
-  description: c.description,
-  unit: c.unit,
-  unitCost: 0,
-  labourHours: 0,
-  labourClass: c.labourClass,
-  pack: c.pack,
-  source: 'pending research',
-  asOf: COSTBOOK_AS_OF,
-  confidence: 'low' as const,
-}));
+export const CATALOG: readonly CatalogItem[] = [...ELECTRICAL_ITEMS, ...MECHANICAL_ITEMS, ...BUILDING_ITEMS];
 
 const BY_CODE = new Map(CATALOG.map((i) => [i.code, i]));
 
@@ -49,22 +43,6 @@ export function searchCatalog(query: string, opts: { trade?: Trade; limit?: numb
   return out;
 }
 
-export const REGIONS: readonly Region[] = [
-  ['AB', 'Alberta', 1.0],
-  ['BC', 'British Columbia', 1.0],
-  ['SK', 'Saskatchewan', 1.0],
-  ['MB', 'Manitoba', 1.0],
-  ['ON', 'Ontario', 1.0],
-  ['QC', 'Quebec', 1.0],
-  ['NB', 'New Brunswick', 1.0],
-  ['NS', 'Nova Scotia', 1.0],
-  ['PE', 'Prince Edward Island', 1.0],
-  ['NL', 'Newfoundland and Labrador', 1.0],
-  ['YT', 'Yukon', 1.0],
-  ['NT', 'Northwest Territories', 1.0],
-  ['NU', 'Nunavut', 1.0],
-].map(([code, name, materialFactor]) => ({ code: code as string, name: name as string, province: code as string, materialFactor: materialFactor as number }));
-
 /** The region for a code; an unknown metro falls back to its province, and anything else to Ontario. */
 export function getRegion(code: string | null | undefined): Region {
   const c = String(code ?? '').toUpperCase();
@@ -75,100 +53,37 @@ export function regionsForProvince(province: string): Region[] {
   return REGIONS.filter((r) => r.province === String(province).toUpperCase());
 }
 
-const TAX: Record<string, Omit<SalesTax, 'province' | 'total'>> = {
-  AB: { gst: 5, pst: 0, qst: 0, hst: 0, pstOnInstalledMaterials: false },
-  BC: { gst: 5, pst: 7, qst: 0, hst: 0, pstOnInstalledMaterials: true },
-  SK: { gst: 5, pst: 6, qst: 0, hst: 0, pstOnInstalledMaterials: true },
-  MB: { gst: 5, pst: 7, qst: 0, hst: 0, pstOnInstalledMaterials: true },
-  ON: { gst: 0, pst: 0, qst: 0, hst: 13, pstOnInstalledMaterials: false },
-  QC: { gst: 5, pst: 0, qst: 9.975, hst: 0, pstOnInstalledMaterials: false },
-  NB: { gst: 0, pst: 0, qst: 0, hst: 15, pstOnInstalledMaterials: false },
-  NS: { gst: 0, pst: 0, qst: 0, hst: 14, pstOnInstalledMaterials: false },
-  PE: { gst: 0, pst: 0, qst: 0, hst: 15, pstOnInstalledMaterials: false },
-  NL: { gst: 0, pst: 0, qst: 0, hst: 15, pstOnInstalledMaterials: false },
-  YT: { gst: 5, pst: 0, qst: 0, hst: 0, pstOnInstalledMaterials: false },
-  NT: { gst: 5, pst: 0, qst: 0, hst: 0, pstOnInstalledMaterials: false },
-  NU: { gst: 5, pst: 0, qst: 0, hst: 0, pstOnInstalledMaterials: false },
-};
-
-/**
- * Sales tax on a contract in the province. Where the contractor pays PST on installed materials
- * (BC, SK, MB), the client is charged GST only and the PST belongs in the material cost.
- */
-export function salesTax(province: string | null | undefined): SalesTax {
-  const p = String(province ?? '').toUpperCase();
-  const t = TAX[p] ?? TAX.ON;
-  const total = t.pstOnInstalledMaterials ? t.gst : Math.round((t.gst + t.pst + t.qst + t.hst) * 1000) / 1000;
-  return { province: TAX[p] ? p : 'ON', ...t, total };
-}
-
-// Placeholder national journeyperson wages until the provincial table lands
-const PLACEHOLDER_WAGE: Record<LabourClass, number> = {
-  electrician: 40,
-  industrial_electrician: 44,
-  apprentice_electrician: 26,
-  plumber: 40,
-  pipefitter: 44,
-  hvac_mechanic: 40,
-  sheet_metal: 38,
-  carpenter: 34,
-  drywaller: 32,
-  insulator: 30,
-  concrete_finisher: 32,
-  roofer: 30,
-  painter: 28,
-  floor_installer: 30,
-  welder: 36,
-  equipment_operator: 36,
-  labourer: 26,
-};
-
 const round2 = (x: number) => Math.round(x * 100) / 100;
 
-/** What one paid hour costs the employer: wage plus vacation, statutory holidays, CPP, EI, WCB and benefits. */
-export function labourCost(labourClass: LabourClass, province: string, opts: { shop?: ShopType } = {}): LabourCost {
-  const shop = opts.shop ?? 'open';
-  const wage = PLACEHOLDER_WAGE[labourClass] ?? PLACEHOLDER_WAGE.labourer;
-  const vacation = wage * 0.04;
-  const statHoliday = wage * 0.036;
-  const gross = wage + vacation + statHoliday;
-  const cpp = gross * 0.0595;
-  const ei = gross * 0.0228;
-  const wcb = gross * 0.025;
-  const benefits = 0;
-  const total = gross + cpp + ei + wcb + benefits;
-  return {
-    labourClass,
-    province: String(province).toUpperCase(),
-    shop,
-    wage: round2(wage),
-    vacation: round2(vacation),
-    statHoliday: round2(statHoliday),
-    cpp: round2(cpp),
-    ei: round2(ei),
-    wcb: round2(wcb),
-    benefits: round2(benefits),
-    total: round2(total),
-    burdenPct: round2(((total - wage) / wage) * 100),
-    source: 'placeholder',
-    asOf: COSTBOOK_AS_OF,
-  };
+/**
+ * The provincial sales tax a contractor pays and cannot recover on materials it installs: BC, and
+ * Manitoba general trades. GST, HST and QST are recoverable and are never added to a cost.
+ */
+function nonRecoverablePst(province: string, trade: Trade | undefined): { pct: number; note: string } {
+  const tax = salesTax(province, { trade: trade ?? 'general' });
+  if (!tax.pstOnInstalledMaterials || tax.pst <= 0) return { pct: 0, note: '' };
+  const name = tax.province === 'MB' ? 'RST' : 'PST';
+  return { pct: tax.pst, note: `Includes ${tax.pst}% ${tax.province} ${name} on materials (not recoverable).` };
 }
 
+const joinNotes = (...notes: (string | undefined)[]) => notes.filter(Boolean).join(' ') || undefined;
+
 /**
- * A suggested hourly charge-out rate: burdened cost, grossed up for the share of paid hours that
- * are not billable, then overhead and profit. Rounded to the dollar.
+ * Items whose delivered price swings by city far more than the general material factor allows:
+ * ready-mix is batched and trucked locally, and Toronto runs about a third above Edmonton. Researched
+ * delivered prices per m³ (2026: Dufferin's Toronto list, Calgary and Lower Mainland supplier guides,
+ * an estimator guide's city figures). 32 MPa adds about $32 per m³ except where a list price was found.
+ * Province-wide regions keep the national figure times the regional factor.
  */
-export function billingRate(
-  labourClass: LabourClass,
-  province: string,
-  opts: { shop?: ShopType; utilizationPct?: number; overheadPct?: number; profitPct?: number } = {}
-): number {
-  const { total } = labourCost(labourClass, province, { shop: opts.shop });
-  const utilization = Math.min(Math.max(opts.utilizationPct ?? 80, 30), 100) / 100;
-  const overhead = 1 + Math.max(opts.overheadPct ?? 20, 0) / 100;
-  const profit = 1 + Math.max(opts.profitPct ?? 15, 0) / 100;
-  return Math.round((total / utilization) * overhead * profit);
+const CITY_PRICES: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+  'CONC-25MPA': { 'ON-TORONTO': 266, 'ON-OTTAWA': 200, 'QC-MONTREAL': 195, 'NS-HALIFAX': 205, 'MB-WINNIPEG': 200, 'SK-SASKATOON': 198, 'AB-EDMONTON': 190, 'AB-CALGARY': 200, 'BC-VANCOUVER': 240 },
+  'CONC-32MPA': { 'ON-TORONTO': 295, 'ON-OTTAWA': 232, 'QC-MONTREAL': 227, 'NS-HALIFAX': 237, 'MB-WINNIPEG': 232, 'SK-SASKATOON': 230, 'AB-EDMONTON': 222, 'AB-CALGARY': 232, 'BC-VANCOUVER': 272 },
+};
+
+/** The reference unit cost for a region: a researched city price where one exists, else national x factor. */
+function referenceUnitCost(item: CatalogItem, region: Region): { cost: number; note?: string } {
+  const city = CITY_PRICES[item.code]?.[region.code];
+  return city !== undefined ? { cost: city, note: `Delivered price for ${region.name}.` } : { cost: item.unitCost * region.materialFactor };
 }
 
 const companyPriceFor = (code: string, prices: readonly CompanyPrice[] | undefined) => prices?.find((p) => p.itemCode === code);
@@ -176,6 +91,8 @@ const companyPriceFor = (code: string, prices: readonly CompanyPrice[] | undefin
 /**
  * Prices takeoff lines: the company's saved price first, then the reference catalog adjusted for
  * the region, then the line's own figure. Labour hours follow the same order unless the line sets them.
+ * Where the contractor pays PST it cannot recover on installed materials (BC, and Manitoba general
+ * trades), that PST is added to the material cost of catalog and company prices and the note says so.
  */
 export function priceTakeoff(lines: readonly TakeoffLine[], opts: { region: string; companyPrices?: readonly CompanyPrice[] }): PricedLine[] {
   const region = getRegion(opts.region);
@@ -184,31 +101,34 @@ export function priceTakeoff(lines: readonly TakeoffLine[], opts: { region: stri
     const own = line.code ? companyPriceFor(line.code, opts.companyPrices) : undefined;
     const item = line.code ? getItem(line.code) : undefined;
     if (own) {
+      const pst = nonRecoverablePst(region.province, item?.trade);
       return {
         code: line.code!,
         description: line.description || own.description || item?.description || line.code!,
         quantity,
         unit: line.unit || own.unit || item?.unit || 'ea',
-        materialUnitCost: round2(own.unitCost),
+        materialUnitCost: round2(own.unitCost * (1 + pst.pct / 100)),
         labourHoursPerUnit: line.labourHoursPerUnit ?? own.labourHours ?? item?.labourHours ?? 0,
         labourClass: line.labourClass ?? item?.labourClass ?? null,
         priceSource: 'company',
         confidence: null,
-        note: line.note,
+        note: joinNotes(line.note, pst.note),
       };
     }
     if (item) {
+      const pst = nonRecoverablePst(region.province, item.trade);
+      const ref = referenceUnitCost(item, region);
       return {
         code: item.code,
         description: line.description || item.description,
         quantity,
         unit: line.unit || item.unit,
-        materialUnitCost: round2(item.unitCost * region.materialFactor),
+        materialUnitCost: round2(ref.cost * (1 + pst.pct / 100)),
         labourHoursPerUnit: line.labourHoursPerUnit ?? item.labourHours,
         labourClass: line.labourClass ?? item.labourClass,
         priceSource: 'reference',
         confidence: item.confidence,
-        note: line.note,
+        note: joinNotes(line.note, ref.note, pst.note),
       };
     }
     const hasOwnCost = typeof line.materialUnitCost === 'number' && Number.isFinite(line.materialUnitCost);

@@ -48,8 +48,15 @@ describe('cost engine contract', () => {
       expect(tax.total).toBeGreaterThanOrEqual(5);
       expect(tax.total).toBeLessThanOrEqual(15);
     }
-    // Contractors in BC, SK and MB pay PST on installed materials and charge the client GST only
-    for (const p of ['BC', 'SK', 'MB']) expect(costbook.salesTax(p)).toMatchObject({ pstOnInstalledMaterials: true, total: 5 });
+    // BC: the contractor pays 7% PST on installed materials and charges the client GST only.
+    expect(costbook.salesTax('BC')).toMatchObject({ pstOnInstalledMaterials: true, total: 5 });
+    // SK: since April 2017 materials are bought PST-exempt and 6% PST is charged on the whole contract
+    // price, on top of 5% GST (Saskatchewan Bulletin PST-12).
+    expect(costbook.salesTax('SK')).toMatchObject({ pstOnInstalledMaterials: false, total: 11 });
+    // MB: general trades are like BC (RST on materials, client pays GST only), but mechanical and electrical
+    // systems are taxable on the supply-and-install charge: 7% RST + 5% GST (Manitoba Bulletins 005, 008, 031).
+    expect(costbook.salesTax('MB')).toMatchObject({ pstOnInstalledMaterials: true, total: 5 });
+    expect(costbook.salesTax('MB', { trade: 'electrical' })).toMatchObject({ pstOnInstalledMaterials: false, total: 12 });
     expect(costbook.salesTax('ON').total).toBe(13);
   });
 
