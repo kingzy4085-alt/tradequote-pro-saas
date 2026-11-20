@@ -1,15 +1,14 @@
 import { AHJ_CHECK_LINE, awgLabel, ceil, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, values } from '../common';
-import { CONDUIT_METRIC, CONDUIT_SIZES, EMT_AREA_MM2, EMT_CODE_SIZES, PVC_AREA_MM2, PVC_CODE_SIZES, SIZES, nylonAreaMm2, rw90AreaMm2, wireCode } from '../electrical-data';
+import { CONDUIT_METRIC, CONDUIT_SIZES, EMT_CODE_SIZES, PVC_CODE_SIZES, SIZES, fillLimitPct, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
-const sizeOptions = SIZES.map((s) => [s, awgLabel(s)] as [string, string]);
 const fields: CalcField[] = [
-  selField('wire', 'Conductor type', 'rw90', [['rw90', 'RW90 XLPE (600 V, unjacketed)'], ['nylon', 'T90 Nylon / TWN75']]),
-  selField('conduit', 'Conduit type', 'emt', [['emt', 'EMT'], ['pvc', 'Rigid PVC']]),
-  selField('size1', 'Conductor size A', '12', sizeOptions),
-  numField('count1', 'Number of conductors, size A', undefined, 3, 0, 100, 1),
-  selField('size2', 'Conductor size B (optional)', '12', sizeOptions, 'For a different bonding conductor or a second size.'),
-  numField('count2', 'Number of conductors, size B', undefined, 1, 0, 100, 1, 'Bonding conductors count in conduit fill.'),
+  numField('conductorOd', 'Conductor outside diameter', 'mm', 4.5, 1, 60, 0.05, 'Overall diameter of one insulated conductor, from the cable or wire datasheet. Not supplied by this calculator.'),
+  numField('conduitId', 'Conduit internal diameter', 'mm', 16, 5, 200, 0.1, 'Internal diameter of the conduit you will use, from the conduit spec sheet or the manufacturer.'),
+  numField('count', 'Number of conductors', undefined, 4, 0, 200, 1, 'Count every conductor that goes in the conduit, bonding conductors included. This sets the fill limit: 53% for one, 31% for two, 40% for three or more.'),
+  selField('conduit', 'Conduit type for pricing', 'emt', [['emt', 'EMT'], ['pvc', 'Rigid PVC']]),
+  selField('tradeSize', 'Trade size for pricing', '1/2', CONDUIT_SIZES.map((s) => [s, `${s} in (${CONDUIT_METRIC[s]} mm)`] as [string, string]), 'The size you will buy. It is not checked against the diameter above, so enter the internal diameter of this size.'),
+  selField('wireSize', 'Conductor size for pricing', '12', SIZES.map((s) => [s, awgLabel(s)] as [string, string]), 'Copper wire for the takeoff. It does not change the fill, which comes from the outside diameter above.'),
   numField('length', 'Run length', 'm', 15, 0.5, 1000, 0.5),
   numField('runs', 'Identical runs', undefined, 1, 1, 100, 1),
 ];
@@ -19,53 +18,62 @@ export const conduitFill: Calculator = {
   name: 'Conduit fill calculator',
   trade: 'electrical',
   category: 'Electrical design',
-  summary: 'Smallest EMT or rigid PVC trade size for a set of conductors under the Canadian Electrical Code 53/31/40 per cent fill limits, with conduit, couplings, connectors and wire for the takeoff.',
+  summary: 'Conduit fill from the conductor and conduit diameters you enter, checked against the 53/31/40 per cent fill limits, with conduit, couplings, connectors and wire for the takeoff.',
   fields,
-  keywords: ['conduit', 'emt', 'pvc', 'fill', 'raceway', 'rule 12-910', 'trade size'],
+  keywords: ['conduit', 'emt', 'pvc', 'fill', 'raceway', 'trade size', 'conductor diameter'],
   run(input: CalcInput): CalcResult {
     const warnings: string[] = [];
     const p = readFields(input, fields, warnings);
-    const area = (s: string) => (p.s('wire') === 'rw90' ? rw90AreaMm2(s) : nylonAreaMm2(s));
-    const n1 = Math.round(p.n('count1'));
-    const n2 = Math.round(p.n('count2'));
-    const n = n1 + n2;
-    const total = n1 * area(p.s('size1')) + n2 * area(p.s('size2'));
-    const limit = n <= 1 ? 53 : n === 2 ? 31 : 40;
-    const areas = p.s('conduit') === 'emt' ? EMT_AREA_MM2 : PVC_AREA_MM2;
+    const od = p.n('conductorOd');
+    const id = p.n('conduitId');
+    const n = Math.round(p.n('count'));
+    const oneArea = (Math.PI / 4) * od * od;
+    const conduitArea = (Math.PI / 4) * id * id;
+    const total = n * oneArea;
+    const limit = fillLimitPct(n);
+    const allowed = (conduitArea * limit) / 100;
+    const fillPct = conduitArea > 0 ? (total / conduitArea) * 100 : 0;
+    const pass = n > 0 && total <= allowed + 1e-9;
+    // Smallest internal diameter that holds n conductors: n x area = limit% x conduit area, so ID = OD x sqrt(n / limit).
+    const minId = n > 0 ? od * Math.sqrt(n / (limit / 100)) : 0;
+    // Most conductors of this size the conduit takes, each count judged against its own limit.
+    let maxCount = 0;
+    for (let k = 1; k <= 200; k++) if (k * oneArea <= (conduitArea * fillLimitPct(k)) / 100 + 1e-9) maxCount = k;
     if (n === 0) warnings.push('Enter at least one conductor.');
-    const fit = CONDUIT_SIZES.find((s) => total <= (areas[s] * limit) / 100 + 1e-9);
-    if (!fit && n > 0) warnings.push('The conductors do not fit a 4 in conduit; split them between runs.');
-    const fillPct = fit ? (total / areas[fit]) * 100 : 0;
-    if (fit && fillPct > 35) warnings.push(`Fill is ${fmt(fillPct, 0)}% of the area. On long runs or with several bends consider the next size for pulling.`);
-    if (p.s('wire') === 'rw90') warnings.push('RW90 XLPE areas are calculated from CEC Table 6A insulation thickness at 14, 12, 6 AWG and 500 kcmil; confirm 1 AWG to 4/0 against Table 6A.');
-    warnings.push('Conduit areas follow NEC Table 4 / CEC Table 9 dimensions; 16 mm EMT uses the CEC figure. Manufacturers vary slightly.');
+    if (n > 0 && !pass) warnings.push(`Fill is ${fmt(fillPct, 1)}% of the conduit area, over the ${limit}% limit. You need an internal diameter of at least ${fmt(minId, 1)} mm, or fewer conductors.`);
+    if (pass && fillPct > 35) warnings.push(`Fill is ${fmt(fillPct, 0)}% of the area. On long runs or with several bends consider the next size for pulling.`);
+    if (n > 0) warnings.push('The result depends on the diameters you typed. Use the datasheet outside diameter of the actual conductor or cable, and the actual conduit internal diameter.');
+    const size = p.s('tradeSize');
     const len = p.n('length');
     const runs = Math.round(p.n('runs'));
-    const code = fit && (p.s('conduit') === 'emt' ? EMT_CODE_SIZES : PVC_CODE_SIZES).has(fit) ? `${p.s('conduit') === 'emt' ? 'EMT' : 'PVC'}-${fit}` : undefined;
+    const emt = p.s('conduit') === 'emt';
+    const code = (emt ? EMT_CODE_SIZES : PVC_CODE_SIZES).has(size) ? `${emt ? 'EMT' : 'PVC'}-${size}` : undefined;
     const couplings = Math.max(0, ceil(len / 3) - 1) * runs;
     const connectors = 2 * runs;
-    const conduitName = p.s('conduit') === 'emt' ? 'EMT' : 'rigid PVC';
-    const wire = (s: string, count: number) => (count > 0 ? coreOrFree(wireCode('cu', s), `RW90 copper ${awgLabel(s)}`, round(count * len * runs, 1), 'm', { note: p.s('wire') === 'nylon' ? 'T90 Nylon priced as RW90' : undefined }) : null);
-    const takeoff = !fit ? [] : compact([
-      coreOrFree(code, `${conduitName} conduit ${fit} in`, round(len * runs, 1), 'm'),
-      p.s('conduit') === 'emt' && EMT_CODE_SIZES.has(fit) ? core(`EMT-COUP-${fit}`, couplings) : free(`${conduitName} coupling ${fit} in`, couplings, 'ea'),
-      p.s('conduit') === 'emt' && EMT_CODE_SIZES.has(fit) ? core(`EMT-CONN-${fit}`, connectors) : free(`${conduitName} terminal adapter ${fit} in`, connectors, 'ea'),
-      ...(p.s('size1') === p.s('size2') ? [wire(p.s('size1'), n1 + n2)] : [wire(p.s('size1'), n1), wire(p.s('size2'), n2)]),
+    const conduitName = emt ? 'EMT' : 'rigid PVC';
+    const wireS = p.s('wireSize');
+    const takeoff = compact([
+      coreOrFree(code, `${conduitName} conduit ${size} in`, round(len * runs, 1), 'm'),
+      emt && EMT_CODE_SIZES.has(size) ? core(`EMT-COUP-${size}`, couplings) : free(`${conduitName} coupling ${size} in`, couplings, 'ea'),
+      emt && EMT_CODE_SIZES.has(size) ? core(`EMT-CONN-${size}`, connectors) : free(`${conduitName} terminal adapter ${size} in`, connectors, 'ea'),
+      n > 0 ? coreOrFree(wireCode('cu', wireS), `RW90 copper ${awgLabel(wireS)}`, round(n * len * runs, 1), 'm') : null,
     ]);
     return {
       summary: [
-        { label: 'Minimum conduit', value: fit ? `${fit} in (${CONDUIT_METRIC[fit]} mm) ${conduitName}` : 'Larger than 4 in', emphasis: true },
-        { label: 'Fill', value: fit ? `${fmt(fillPct, 1)}% of the area (limit ${limit}%)` : 'n/a' },
+        { label: 'Result', value: n === 0 ? 'No conductors' : pass ? 'Pass' : 'Fail', emphasis: true },
+        { label: 'Fill', value: `${fmt(fillPct, 1)}% of the area (limit ${limit}%)` },
         { label: 'Conductor area', value: `${fmt(total, 1)} mm² for ${n} conductors` },
-        { label: 'Allowed area in that size', value: fit ? `${fmt((areas[fit] * limit) / 100, 0)} mm²` : 'n/a' },
+        { label: 'Allowed area in this conduit', value: `${fmt(allowed, 0)} mm²` },
+        { label: 'Smallest internal diameter for these conductors', value: n > 0 ? `${fmt(minId, 1)} mm` : 'n/a' },
+        { label: 'Most conductors of this size that fit', value: `${maxCount}` },
         { label: 'Couplings and connectors', value: `${couplings} couplings, ${connectors} connectors` },
       ],
-      values: values({ trade_size: fit ?? null, metric_size: fit ? CONDUIT_METRIC[fit] : null, fill_pct: round(fillPct, 2), limit_pct: limit, conductor_area_mm2: round(total, 2), conductors: n, conduit_m: round(len * runs, 1), couplings, connectors }),
+      values: values({ passes: n > 0 ? pass : null, fill_pct: round(fillPct, 2), limit_pct: limit, conductor_area_mm2: round(total, 2), conduit_area_mm2: round(conduitArea, 1), allowed_area_mm2: round(allowed, 1), min_conduit_id_mm: round(minId, 2), max_conductors: maxCount, trade_size: size, conductors: n, conduit_m: round(len * runs, 1), couplings, connectors }),
       takeoff,
       warnings,
       references: [
-        'CEC 2024 Rule 12-910 and Table 8: 53% for one conductor, 31% for two, 40% for three or more',
-        'Conductor areas: CEC Table 6A (RW90 XLPE) and Table 6K (T90 Nylon); conduit areas: CEC Table 9 series / NEC Chapter 9 Table 4',
+        'Fill limits as a share of the conduit cross-section: 53% for one conductor, 31% for two, 40% for three or more (summary of the CEC conduit fill rule)',
+        'Areas are computed from the diameters you enter: area = pi/4 x diameter squared. No conductor or conduit dimension table is built in',
         'Couplings every 3 m (10 ft) and two connectors per run are estimating assumptions',
         AHJ_CHECK_LINE,
       ],

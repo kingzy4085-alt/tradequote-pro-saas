@@ -1,37 +1,30 @@
-import { AHJ_CHECK_LINE, compact, core, fmt, free, numField, readFields, round, selField, boolField, values } from '../common';
+import { AHJ_CHECK_LINE, compact, core, fmt, numField, readFields, round, selField, values } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
-/** CEC Table 22: usable space per insulated conductor, mL (cm3). */
-export const T22_ML: Record<string, number> = { '14': 24.6, '12': 28.7, '10': 36.9, '8': 45.1, '6': 73.7 };
-/** CEC Table 23 box capacities in mL. Plastic boxes are not in Table 23: the figures are conservative typical volumes, use the box marking. */
-export const BOXES: { id: string; label: string; ml: number; code?: string; noDevices?: boolean }[] = [
-  { id: 'dev-3x2x1.5', label: 'Steel device box 3 x 2 x 1-1/2 in', ml: 131 },
-  { id: 'dev-3x2x2', label: 'Steel device box 3 x 2 x 2 in', ml: 163 },
-  { id: 'dev-3x2x2.5', label: 'Steel device box 3 x 2 x 2-1/2 in', ml: 204, code: 'BOX-DEVICE' },
-  { id: 'dev-3x2x3', label: 'Steel device box 3 x 2 x 3 in', ml: 245 },
-  { id: 'plastic-1g', label: 'Plastic single-gang box (typical 229 mL, check marking)', ml: 229, code: 'BOX-PLASTIC-1G' },
-  { id: 'oct-1.5', label: 'Octagon 4 x 1-1/2 in', ml: 245, code: 'BOX-OCTAGON', noDevices: true },
-  { id: 'oct-2.125', label: 'Octagon 4 x 2-1/8 in', ml: 344, noDevices: true },
-  { id: 'sq-1.5', label: 'Square 4 x 1-1/2 in', ml: 344 },
-  { id: 'plastic-2g', label: 'Plastic two-gang box (typical 459 mL, check marking)', ml: 459, code: 'BOX-PLASTIC-2G' },
-  { id: 'sq-2.125', label: 'Square 4 x 2-1/8 in', ml: 491, code: 'BOX-4SQ' },
+/** Boxes the takeoff can price. Names and catalog codes only: no volumes, which come from the box marking. */
+export const BOX_PRICING: { id: string; label: string; code: string }[] = [
+  { id: 'BOX-DEVICE', label: 'Steel device box 3 x 2 in', code: 'BOX-DEVICE' },
+  { id: 'BOX-PLASTIC-1G', label: 'Plastic single-gang box', code: 'BOX-PLASTIC-1G' },
+  { id: 'BOX-PLASTIC-2G', label: 'Plastic two-gang box', code: 'BOX-PLASTIC-2G' },
+  { id: 'BOX-OCTAGON', label: 'Octagon box 4 in', code: 'BOX-OCTAGON' },
+  { id: 'BOX-4SQ', label: 'Square box 4 in', code: 'BOX-4SQ' },
 ];
 
+const SIZES_USED = ['14', '12', '10', '8', '6'] as const;
+const ALLOWANCE_HELP = 'Volume allowance per conductor of this size, in mL, from the table in Rule 12-3034 of your code book. Leave at 0 until you have read it.';
+
 const fields: CalcField[] = [
-  numField('n14', '14 AWG conductors', undefined, 4, 0, 40, 1, 'Each conductor that enters and ends in the box counts once; a through-wire counts once; a pigtail that starts and ends in the box counts zero.'),
-  numField('n12', '12 AWG conductors', undefined, 0, 0, 40, 1),
-  numField('n10', '10 AWG conductors', undefined, 0, 0, 40, 1),
-  numField('n8', '8 AWG conductors', undefined, 0, 0, 40, 1),
-  numField('n6', '6 AWG conductors', undefined, 0, 0, 40, 1),
-  boolField('bonding', 'Bonding (ground) conductors present', true, 'Conservative estimate: all bonding conductors together count as one conductor of the largest size. Confirm against Rule 12-3034.'),
-  numField('devices', 'Switches and receptacles (one strap each)', undefined, 1, 0, 12, 1, 'Conservative estimate: each counts as two conductors of the largest size. Confirm against Rule 12-3034.'),
-  numField('studs', 'Fixture studs or hickeys', undefined, 0, 0, 6, 1, 'Conservative estimate: each counts as one conductor of the largest size. Confirm against Rule 12-3034.'),
-  numField('connectors', 'Wire connectors (wire nuts)', undefined, 0, 0, 40, 1, 'Conservative estimate: each pair counts as one conductor of the largest size. Confirm against Rule 12-3034.'),
-  numField('clamps', 'Internal cable clamps', undefined, 0, 0, 10, 1, 'Not counted here. Use a box whose marked volume allows for them, and confirm with Rule 12-3034.'),
-  numField('deepDevices', 'Devices deeper than 25.4 mm behind the strap', undefined, 0, 0, 12, 1, 'GFCI and smart devices: conservative estimate: reduce usable space by 32 mL per cm of depth. Confirm against Rule 12-3034.'),
-  numField('deepDepth', 'Depth of those devices behind the strap', 'cm', 4, 2.54, 10, 0.1),
-  selField('box', 'Box to check', 'auto', [['auto', 'Find the smallest box that fits'], ...BOXES.map((b) => [b.id, b.label] as [string, string])]),
-  numField('customMl', 'Marked box volume (overrides the list)', 'mL', 0, 0, 5000, 1, 'Enter the volume marked on the box, or leave at 0.'),
+  numField('boxMl', 'Box volume as marked on the box', 'mL', 0, 0, 5000, 1, 'Read the volume marked on the box (or its spec sheet). 0 means not entered yet.'),
+  ...SIZES_USED.flatMap((s) => [
+    numField(`n${s}`, `${s} AWG conductors`, undefined, s === '14' ? 4 : 0, 0, 40, 1, s === '14' ? 'Count the conductors the rule says to count, including any bonding conductors your code book counts. Each conductor that enters and ends in the box counts once; a through-wire counts once.' : undefined),
+    numField(`ml${s}`, `${s} AWG allowance per conductor`, 'mL', 0, 0, 200, 0.1, ALLOWANCE_HELP),
+  ]),
+  numField('devices', 'Switches and receptacles', undefined, 1, 0, 12, 1, 'How many devices are in the box.'),
+  numField('deviceMl', 'Allowance per device', 'mL', 0, 0, 500, 0.1, 'Volume allowance for one device, in mL, from Rule 12-3034 in your code book. It is usually tied to the largest conductor connected to the device.'),
+  numField('clamps', 'Internal cable clamps', undefined, 0, 0, 10, 1, 'Count of clamp sets inside the box, if any.'),
+  numField('clampMl', 'Allowance per clamp set', 'mL', 0, 0, 500, 0.1, 'Volume allowance for internal clamps, in mL, from Rule 12-3034 in your code book. Leave at 0 for clamps that are not inside the box.'),
+  numField('otherMl', 'Other allowances, total', 'mL', 0, 0, 2000, 0.1, 'Fixture studs, hickeys, wire connectors, deep devices and anything else Rule 12-3034 adds, worked out from your code book and added together.'),
+  selField('boxType', 'Box for pricing (optional)', 'none', [['none', 'No takeoff'], ...BOX_PRICING.map((b) => [b.id, b.label] as [string, string])], 'Only used to price the box. The volume that counts is the one you typed from the marking.'),
   numField('qty', 'Number of these boxes', undefined, 1, 1, 500, 1),
 ];
 
@@ -40,54 +33,51 @@ export const boxFill: Calculator = {
   name: 'Box fill calculator',
   trade: 'electrical',
   category: 'Electrical design',
-  summary: 'Required box volume for conductors, devices and fittings under CEC Rule 12-3034, with pass or fail and the smallest standard box that fits.',
+  summary: 'Adds up the volume allowances you read from Rule 12-3034 for conductors, devices and clamps, and compares the total with the volume marked on the box.',
   fields,
-  keywords: ['box fill', 'outlet box', 'junction box', 'device box', 'rule 12-3034', 'octagon', 'table 22', 'table 23'],
+  keywords: ['box fill', 'outlet box', 'junction box', 'device box', 'rule 12-3034', 'box volume'],
   run(input: CalcInput): CalcResult {
     const warnings: string[] = [];
     const p = readFields(input, fields, warnings);
-    const counts: [string, number][] = (['14', '12', '10', '8', '6'] as const).map((s) => [s, Math.round(p.n(`n${s}`))]);
-    const present = counts.filter(([, n]) => n > 0);
-    const largest = present.length ? present[present.length - 1][0] : '14';
-    const big = T22_ML[largest];
-    let ml = 0;
-    for (const [s, n] of counts) ml += n * T22_ML[s];
-    const conductorMl = ml;
-    const bonding = p.b('bonding') ? big : 0;
-    const devices = Math.round(p.n('devices')) * 2 * big;
-    const studs = Math.round(p.n('studs')) * big;
-    const connectors = Math.floor(Math.round(p.n('connectors')) / 2) * big;
-    const deep = Math.round(p.n('deepDevices')) * 32 * p.n('deepDepth');
-    const required = conductorMl + bonding + devices + studs + connectors + deep;
-    if (!present.length) warnings.push('No conductors entered; only fittings and devices were counted.');
-    if (p.n('clamps') > 0) warnings.push('Internal clamps are not counted here; make sure the box volume you use allows for the space they take, and confirm against Rule 12-3034.');
-    const custom = p.n('customMl');
-    const chosen = p.s('box');
-    const list = [...BOXES].sort((a, c) => a.ml - c.ml).filter((b) => b.ml >= required - 1e-9 && !(b.noDevices && Math.round(p.n('devices')) > 0));
-    const auto = list[0];
-    const sel = custom > 0 ? { id: 'custom', label: `Marked ${custom} mL box`, ml: custom, code: undefined as string | undefined } : chosen === 'auto' ? auto : BOXES.find((b) => b.id === chosen);
-    if (sel && sel.id !== 'custom' && 'noDevices' in sel && (sel as { noDevices?: boolean }).noDevices && Math.round(p.n('devices')) > 0) warnings.push('Octagon boxes do not take switches or receptacles without a device ring; pick a device box or square box.');
-    const pass = !!sel && sel.ml >= required - 1e-9;
-    if (!sel) warnings.push('No standard box in the list is large enough; use a larger junction box and confirm its size with the authority having jurisdiction.');
-    else if (!pass) warnings.push(`${sel.label} holds ${sel.ml} mL but ${fmt(required, 1)} mL is required.${auto ? ` Use at least: ${auto.label}.` : ''}`);
-    if (big && required > 0 && Object.keys(T22_ML).length) warnings.push('Table 22 is used for mixed sizes and boxes; where all conductors are one size Table 23 gives the same answer in conductor counts.');
-    warnings.push('The allowances for devices, studs, connectors, bonding conductors and deep devices are a conservative estimate, not a confirmed Rule 12-3034 calculation. Confirm the box volume against Rule 12-3034 before you rely on it.');
+    let conductorMl = 0;
+    let conductorCount = 0;
+    for (const s of SIZES_USED) {
+      const n = Math.round(p.n(`n${s}`));
+      conductorCount += n;
+      conductorMl += n * p.n(`ml${s}`);
+      if (n > 0 && p.n(`ml${s}`) <= 0) warnings.push(`${n} x ${s} AWG counted but no allowance was entered for ${s} AWG, so they add 0 mL. Enter the Rule 12-3034 figure.`);
+    }
+    const devices = Math.round(p.n('devices'));
+    const clamps = Math.round(p.n('clamps'));
+    const deviceMl = devices * p.n('deviceMl');
+    const clampMl = clamps * p.n('clampMl');
+    if (devices > 0 && p.n('deviceMl') <= 0) warnings.push('Devices are counted but no allowance per device was entered, so they add 0 mL. Look it up in Rule 12-3034.');
+    if (clamps > 0 && p.n('clampMl') <= 0) warnings.push('Clamps are counted but no allowance per clamp set was entered, so they add 0 mL. Look it up in Rule 12-3034.');
+    const required = conductorMl + deviceMl + clampMl + p.n('otherMl');
+    const boxMl = p.n('boxMl');
+    const entered = boxMl > 0;
+    const pass = entered && boxMl >= required - 1e-9;
+    if (!entered) warnings.push('Enter the box volume marked on the box to get a pass or fail.');
+    else if (!pass) warnings.push(`The box holds ${fmt(boxMl, 1)} mL but ${fmt(required, 1)} mL is required. Use a larger box.`);
+    if (conductorCount === 0 && devices === 0 && clamps === 0 && p.n('otherMl') <= 0) warnings.push('No conductors, devices or allowances entered.');
+    if (entered && required <= 0) warnings.push('The required volume is 0 mL, so check that the allowances were entered.');
     const qty = Math.round(p.n('qty'));
-    const takeoff = sel && pass ? compact([sel.code ? core(sel.code, qty) : free(sel.label, qty, 'ea')]) : [];
+    const pick = BOX_PRICING.find((b) => b.id === p.s('boxType'));
+    const takeoff = pick && pass ? compact([core(pick.code, qty)]) : [];
     return {
       summary: [
-        { label: 'Result', value: pass ? 'Pass' : 'Fail', emphasis: true },
+        { label: 'Result', value: !entered ? 'Enter the box volume' : pass ? 'Pass' : 'Fail', emphasis: true },
         { label: 'Volume required', value: `${fmt(required, 1)} mL` },
-        { label: 'Box checked', value: sel ? `${sel.label}, ${sel.ml} mL` : 'none fits' },
-        { label: 'Smallest standard box that fits', value: auto ? `${auto.label} (${auto.ml} mL)` : 'none in list' },
-        { label: 'Space remaining', value: sel ? `${fmt(sel.ml - required, 1)} mL` : 'n/a' },
+        { label: 'Box volume as marked', value: entered ? `${fmt(boxMl, 1)} mL` : 'not entered' },
+        { label: 'Space remaining', value: entered ? `${fmt(boxMl - required, 1)} mL` : 'n/a' },
+        { label: 'Breakdown', value: `conductors ${fmt(conductorMl, 1)} mL, devices ${fmt(deviceMl, 1)} mL, clamps ${fmt(clampMl, 1)} mL, other ${fmt(p.n('otherMl'), 1)} mL` },
       ],
-      values: values({ required_ml: round(required, 1), conductors_ml: round(conductorMl, 1), box_ml: sel ? sel.ml : null, passes: pass, box_id: sel ? sel.id : null, remaining_ml: sel ? round(sel.ml - required, 1) : null }),
+      values: values({ required_ml: round(required, 1), conductors_ml: round(conductorMl, 1), devices_ml: round(deviceMl, 1), clamps_ml: round(clampMl, 1), box_ml: entered ? boxMl : null, passes: entered ? pass : null, remaining_ml: entered ? round(boxMl - required, 1) : null }),
       takeoff,
       warnings,
       references: [
-        'CEC 2024 Rule 12-3034 (maximum number of insulated conductors in a box), Table 22 (space per conductor) and Table 23 (box capacities)',
-        'Allowances (conservative estimate, confirm against Rule 12-3034): devices 2 x largest conductor, fixture studs 1, each pair of connectors 1, all bonding conductors together 1',
+        'CEC Rule 12-3034 (maximum number of insulated conductors in a box): the volume allowances are typed by the user from their own code book',
+        'This calculator adds the volumes and compares them with the box marking; no box or conductor volume table is built in',
         AHJ_CHECK_LINE,
       ],
     };

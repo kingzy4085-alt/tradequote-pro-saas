@@ -44,7 +44,7 @@ describe('registry', () => {
 
   it('ignores unknown input keys and merges defaults for missing ones', () => {
     const r = runCalculator('voltage-drop', { bogus: 1 });
-    expect(r?.values.voltage_drop_v).toBeCloseTo(5.847, 2);
+    expect(r?.values.voltage_drop_v).toBeCloseTo(5.817, 2); // 2 x 15 x 30 x 0.006464 ohm/m, computed from resistivity and area
   });
 });
 

@@ -23,7 +23,7 @@ export const transformerSizing: Calculator = {
   category: 'Electrical design',
   summary: 'Standard transformer kVA for a load, primary and secondary full-load currents, and overcurrent protection guidance under CEC Section 26.',
   fields,
-  keywords: ['transformer', 'kva', 'dry-type', 'primary', 'secondary', 'rule 26-254', '600-120/208'],
+  keywords: ['transformer', 'kva', 'dry-type', 'primary', 'secondary', 'overcurrent protection', '600-120/208'],
   run(input: CalcInput): CalcResult {
     const warnings: string[] = [];
     const p = readFields(input, fields, warnings);

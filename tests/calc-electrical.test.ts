@@ -1,8 +1,9 @@
-// Worked examples for the electrical calculators. Each expected figure is hand-checked in a comment
-// against the code table it comes from; none of these tests touch the network or the cost engine.
+// Worked examples for the electrical calculators. Each expected figure is hand-worked in a comment from the
+// formula or the typed input it comes from; none of these tests touch the network or the cost engine.
 import { describe, expect, it } from 'vitest';
 import { CALCULATORS, getCalculator, runCalculator } from '@/lib/calc/registry';
 import { CORE_ITEMS } from '@/lib/costbook/codes';
+import { SIZES, awgNumber, conductorAreaMm2, resistanceOhmPerM, resistivityAt } from '@/lib/calc/electrical-data';
 
 const run = (id: string, input: Record<string, number | string | boolean> = {}) => {
   const r = runCalculator(id, input);
@@ -55,20 +56,61 @@ describe('electrical calculators: shape', () => {
   });
 });
 
+
+// Every figure typed into these tests below as a "code book" value is an arbitrary illustration chosen to make the
+// arithmetic easy to follow. The calculators ship no code-book tables, so none of these numbers is a table row.
+describe('conductor physics (no tables)', () => {
+  // AWG diameter d = 0.127 mm x 92^((36-n)/39). 4/0 is n = -3, so d = 0.127 x 92 = 11.684 mm and the area is pi/4 x d2 = 107.2 mm2.
+  it('computes conductor areas from the AWG formula and the kcmil factor', () => {
+    expect(awgNumber('4/0')).toBe(-3);
+    expect(awgNumber('1/0')).toBe(0);
+    expect(awgNumber('250')).toBeNull();
+    expect(conductorAreaMm2('4/0')).toBeCloseTo(107.22, 1);
+    expect(conductorAreaMm2('12')).toBeCloseTo(3.309, 2); // d = 2.053 mm
+    expect(conductorAreaMm2('250')).toBeCloseTo(126.675, 3); // 250 x 0.5067
+    expect(conductorAreaMm2('nonsense')).toBe(0);
+  });
+
+  // Copper at 75 C: 0.017241 x (1 + 0.00393 x 55) = 0.020968 ohm.mm2/m; x 1.02 stranding / 3.309 mm2 = 0.006464 ohm/m for 12 AWG
+  it('computes resistance from resistivity, temperature, stranding and area', () => {
+    expect(resistivityAt('cu')).toBeCloseTo(0.020968, 5);
+    expect(resistivityAt('al')).toBeCloseTo(0.034529, 5); // 0.028264 x (1 + 0.00403 x 55)
+    expect(resistanceOhmPerM('12', 'cu')).toBeCloseTo(0.006464, 5);
+    expect(resistanceOhmPerM('12', 'al')).toBeCloseTo(0.010644, 5);
+    expect(resistanceOhmPerM('bogus', 'cu')).toBe(0);
+    const r = SIZES.map((s) => resistanceOhmPerM(s, 'cu'));
+    for (let i = 1; i < r.length; i++) expect(r[i], SIZES[i]).toBeLessThan(r[i - 1]);
+  });
+});
+
 describe('voltage-drop', () => {
-  // 30 m = 98.425 ft. 12 AWG copper 1.98 ohm/1000 ft, 15 A, 120 V, pf 1:
-  // drop = 2 x 15 x 98.425 x 0.00198 = 5.847 V = 4.87% of 120 V, over the 3% limit
+  // 30 m, 12 AWG copper (0.006464 ohm/m), 15 A, 120 V, pf 1: drop = 2 x 15 x 30 x 0.006464 = 5.817 V = 4.85%, over the 3% limit
   it('computes the 120 V single-phase default', () => {
     const r = run('voltage-drop');
-    expect(r.values.voltage_drop_v).toBeCloseTo(5.847, 2);
-    expect(r.values.voltage_drop_pct).toBeCloseTo(4.873, 2);
+    expect(r.values.voltage_drop_v).toBeCloseTo(5.817, 2);
+    expect(r.values.voltage_drop_pct).toBeCloseTo(4.848, 2);
     expect(r.values.passes).toBe(false);
     expect(r.warnings.some((w) => w.includes('8-102'))).toBe(true);
   });
 
+  // Worked examples hand-calculated before this rework, from a 12 AWG 1.98 ohm/1000 ft style figure. The physics lands within 3% of each.
+  it('lands within 3% of the previously worked examples', () => {
+    const cases: [string, Record<string, number | string>, number][] = [
+      ['120 V default', {}, 5.847],
+      ['480 V three-phase 3/0', { system: 'ac3-480', size: '3/0', length: 150, lengthUnit: 'ft', load: 100, pf: 1 }, 1.99],
+      ['480 V 250 kcmil steel, pf 0.85', { system: 'ac3-480', size: '250', length: 100, lengthUnit: 'ft', load: 200, pf: 0.85, raceway: 'steel' }, 2.465],
+      ['24 V DC', { system: 'dc', dcVolts: 24, load: 10, length: 20 }, 2.598],
+      ['8 AWG default run', { size: '8' }, 2.297],
+    ];
+    for (const [label, input, old] of cases) {
+      const v = Number(run('voltage-drop', input).values.voltage_drop_v);
+      expect(Math.abs(v / old - 1), `${label}: ${v} vs ${old}`).toBeLessThan(0.03);
+    }
+  });
+
   it('keeps the summary Pass/Fail in step with values.passes, including the 5% total', () => {
     const verdict = (r: ReturnType<typeof run>) => r.summary.find((l) => l.value === 'Pass' || l.value === 'Fail')!.value;
-    // 8 AWG passes on its own (1.91%), but 4% already used upstream makes the total 5.91%: over 5%
+    // 8 AWG passes on its own (1.92%), but 4% already used upstream makes the total 5.92%: over 5%
     const total = run('voltage-drop', { size: '8', upstream: 4 });
     expect(total.values.passes).toBe(false);
     expect(verdict(total)).toBe('Fail');
@@ -78,45 +120,61 @@ describe('voltage-drop', () => {
     expect(verdict(run('voltage-drop'))).toBe('Fail');
   });
 
-  // 10 AWG (1.24): 2 x 15 x 98.425 x 0.00124 = 3.661 V = 3.05%, still over; 8 AWG (0.778): 2.297 V = 1.91%, passes
-  it('finds the smallest size within 3%', () => {
+  // 10 AWG (0.004065 ohm/m): 2 x 15 x 30 x 0.004065 = 3.659 V = 3.05%, still over; 8 AWG (0.002557): 2.301 V = 1.92%, passes
+  it('finds the smallest size within 3% using the computed resistance', () => {
     expect(run('voltage-drop').values.smallest_size).toBe('8');
-    expect(run('voltage-drop', { size: '8' }).values.passes).toBe(true);
+    expect(run('voltage-drop', { size: '10' }).values.voltage_drop_pct).toBeCloseTo(3.049, 2);
+    expect(run('voltage-drop', { size: '8' }).values.voltage_drop_pct).toBeCloseTo(1.917, 2);
   });
 
-  // Three-phase 480 V, 100 A, 150 ft, 3/0 copper (0.0766), pf 1 so reactance drops out:
-  // 1.732 x 100 x 150 x 0.0766/1000 = 1.990 V = 0.415%
+  // 150 ft = 45.72 m, 3/0 copper (85.03 mm2, 0.0002515 ohm/m), 100 A: 1.732 x 100 x 45.72 x 0.0002515 = 1.992 V = 0.415% of 480 V
   it('uses 1.732 for three-phase', () => {
     const r = run('voltage-drop', { system: 'ac3-480', size: '3/0', length: 150, lengthUnit: 'ft', load: 100, pf: 1 });
-    expect(r.values.voltage_drop_v).toBeCloseTo(1.99, 2);
+    expect(r.values.voltage_drop_v).toBeCloseTo(1.992, 2);
     expect(r.values.voltage_drop_pct).toBeCloseTo(0.415, 2);
   });
 
-  // 480 V, 200 A, 100 ft, 250 kcmil (R 0.0515, X steel 0.052), pf 0.85, sin = 0.5268:
-  // Z = 0.0515 x 0.85 + 0.052 x 0.5268 = 0.07117 per 1000 ft; drop = 1.732 x 200 x 100 x 0.07117/1000 = 2.465 V
-  it('adds reactance for a lagging power factor in steel conduit', () => {
-    const r = run('voltage-drop', { system: 'ac3-480', size: '250', length: 100, lengthUnit: 'ft', load: 200, pf: 0.85, raceway: 'steel' });
-    expect(r.values.voltage_drop_v).toBeCloseTo(2.465, 2);
+  // 480 V, 200 A, 100 ft = 30.48 m, 250 kcmil (R = 0.020968 x 1.02 / 126.675 = 0.0001688 ohm/m), pf 0.85, sin = 0.5268, X = 0.17 ohm/km:
+  // Z = 0.0001688 x 0.85 + 0.00017 x 0.5268 = 0.0002331 ohm/m; drop = 1.732 x 200 x 30.48 x 0.0002331 = 2.461 V
+  it('adds reactance for a lagging power factor and says which reactance it used', () => {
+    const base = { system: 'ac3-480', size: '250', length: 100, lengthUnit: 'ft', load: 200, pf: 0.85, raceway: 'steel' };
+    const typical = run('voltage-drop', base);
+    expect(typical.values.voltage_drop_v).toBeCloseTo(2.461, 2);
+    expect(typical.values.reactance_entered).toBe(false);
+    expect(typical.values.reactance_ohm_per_km).toBe(0.17);
+    expect(typical.warnings.some((w) => w.includes('typical estimate'))).toBe(true);
+    expect(typical.references.some((l) => l.includes('typical reactance estimate'))).toBe(true);
+    // Entered reactance 0.25 ohm/km: Z = 0.0001435 + 0.00025 x 0.5268 = 0.0002752; drop = 1.732 x 200 x 30.48 x 0.0002752 = 2.906 V
+    const entered = run('voltage-drop', { ...base, reactance: 0.25 });
+    expect(entered.values.voltage_drop_v).toBeCloseTo(2.906, 2);
+    expect(entered.values.reactance_entered).toBe(true);
+    expect(entered.warnings.some((w) => w.includes('typical estimate'))).toBe(false);
+    expect(entered.references.some((l) => l.includes('entered reactance'))).toBe(true);
+    // Non-metallic wiring uses the lower typical figure, so a slightly smaller drop
+    expect(Number(run('voltage-drop', { ...base, raceway: 'nonmag' }).values.voltage_drop_v)).toBeLessThan(2.461);
+    // At pf 1 reactance drops out
+    expect(run('voltage-drop', { ...base, pf: 1, reactance: 0.9 }).values.voltage_drop_v).toBeCloseTo(1.732 * 200 * 30.48 * 0.0001688, 2);
   });
 
-  // DC 24 V, 10 A, 20 m = 65.617 ft, 12 AWG: 2 x 10 x 65.617 x 0.00198 = 2.598 V = 10.8%
+  // DC 24 V, 10 A, 20 m, 12 AWG: 2 x 10 x 20 x 0.006464 = 2.585 V = 10.77%
   it('handles DC with resistance only', () => {
     const r = run('voltage-drop', { system: 'dc', dcVolts: 24, load: 10, length: 20 });
-    expect(r.values.voltage_drop_v).toBeCloseTo(2.598, 2);
-    expect(r.values.voltage_drop_pct).toBeCloseTo(10.83, 1);
+    expect(r.values.voltage_drop_v).toBeCloseTo(2.585, 2);
+    expect(r.values.voltage_drop_pct).toBeCloseTo(10.773, 2);
   });
 
   it('flags the 5% total including upstream drop', () => {
-    const r = run('voltage-drop', { size: '8', upstream: 4 }); // 1.91% + 4% = 5.91%
-    expect(r.values.total_pct).toBeCloseTo(5.91, 1);
+    const r = run('voltage-drop', { size: '8', upstream: 4 }); // 1.92% + 4% = 5.92%
+    expect(r.values.total_pct).toBeCloseTo(5.917, 2);
     expect(r.warnings.some((w) => w.includes('5% limit'))).toBe(true);
   });
 
-  it('corrects aluminum below 12 AWG and warns when the load exceeds the ampacity', () => {
+  // Aluminum 12 AWG: 0.034529 x 1.02 / 3.309 = 0.010644 ohm/m; 2 x 15 x 30 x 0.010644 = 9.58 V
+  it('corrects aluminum below 12 AWG and computes aluminum resistance', () => {
     const r = run('voltage-drop', { material: 'al', size: '14' });
     expect(r.values.size).toBe('12');
     expect(r.warnings.some((w) => w.includes('aluminum'))).toBe(true);
-    expect(run('voltage-drop', { size: '14', load: 40 }).warnings.some((w) => w.includes('ampacity'))).toBe(true);
+    expect(r.values.voltage_drop_v).toBeCloseTo(9.58, 2);
   });
 
   it('takes off conductors x length only when a length is given, using catalog codes', () => {
@@ -134,259 +192,276 @@ describe('voltage-drop', () => {
   });
 });
 
-describe('conductor-size', () => {
-  // 40 A continuous = 50 A. 8 AWG copper 90 C column 55 A, but a 75 C termination holds it to 50 A: exactly enough
-  it('applies the 125% continuous factor and the termination limit', () => {
-    const r = run('conductor-size', { termination: '75' });
-    expect(r.values.design_current_a).toBe(50);
-    expect(r.values.size).toBe('8');
-    expect(r.values.usable_ampacity_a).toBe(50);
-    expect(r.values.ocpd_a).toBe(50);
+describe('conductor-size (conductor check)', () => {
+  it('asks for the code book ampacity on the defaults instead of guessing one', () => {
+    const r = run('conductor-size');
+    expect(r.summary[0].value).toBe('Enter the code book ampacity');
+    expect(r.values.passes).toBeUndefined();
+    expect(r.values.required_ampacity_a).toBe(50); // 40 A continuous / 0.8
+    expect(r.values.continuous_factor).toBe(0.8);
+    expect(r.warnings.some((w) => w.includes('Enter the conductor ampacity'))).toBe(true);
+    expect(r.takeoff).toEqual([]);
   });
 
-  // 60 C termination: 6 AWG column is 55 A, so 50 A needs 8 AWG at 60 C? 8 AWG 60 C = 40 A, 6 AWG = 55 A
-  it('uses the 60 C column when the equipment is only rated 60 C', () => {
-    expect(run('conductor-size', { termination: '60' }).values.size).toBe('6');
+  // 40 A continuous in a raceway at 80% needs 40 / 0.8 = 50 A. A typed 55 A passes with 5 A to spare; 45 A fails.
+  it('applies the continuous-load factor to the typed ampacity', () => {
+    const ok = run('conductor-size', { tableAmpacity: 55 });
+    expect(ok.values).toMatchObject({ passes: true, required_ampacity_a: 50, corrected_ampacity_a: 55, usable_ampacity_a: 55, margin_a: 5, ocpd_a: 50 });
+    expect(ok.summary[0].value).toBe('Pass');
+    const bad = run('conductor-size', { tableAmpacity: 45 });
+    expect(bad.values.passes).toBe(false);
+    expect(bad.summary[0].value).toBe('Fail');
+    expect(bad.warnings.some((w) => w.includes('below the 50 A required'))).toBe(true);
+    expect(run('conductor-size', { tableAmpacity: 50 }).values.passes).toBe(true); // exactly equal passes
   });
 
-  it('defaults the termination to 60 C unless 75 C equipment is selected', () => {
-    const d = run('conductor-size');
-    expect(d.values.size).toBe('6');
-    expect(d.values.size).toBe(run('conductor-size', { termination: '60' }).values.size);
-    expect(run('conductor-size', { termination: '75' }).values.size).toBe('8');
+  it('uses 100% for equipment marked for it, and no factor for a non-continuous load', () => {
+    expect(run('conductor-size', { rating: '100' }).values.required_ampacity_a).toBe(40);
+    const non = run('conductor-size', { continuous: false });
+    expect(non.values.continuous_factor).toBe(1);
+    expect(non.values.required_ampacity_a).toBe(40);
   });
 
-  // 40 A continuous in free air, 80%-rated equipment: 40 / 0.70 = 57.14 A. 6 AWG free air at 75 C is 105 A, so size by
-  // the factor not 125% (50 A): the design current must be 57.14 A, and a 100%-rated device uses 40 / 0.85 = 47.06 A
+  // Free air: 35 A / 0.7 = 50 A; marked for 100%: 35 / 0.85 = 41.18 A
   it('applies 70% / 85% continuous factors in free air and 80% / 100% in a raceway', () => {
-    const air80 = run('conductor-size', { load: 40, method: 'air' });
-    expect(air80.values.continuous_factor).toBe(0.7);
-    expect(air80.values.design_current_a).toBeCloseTo(57.14, 2);
-    const air100 = run('conductor-size', { load: 40, method: 'air', rating: '100' });
-    expect(air100.values.continuous_factor).toBe(0.85);
-    expect(air100.values.design_current_a).toBeCloseTo(47.06, 2);
-    const rw80 = run('conductor-size', { load: 40 });
-    expect(rw80.values.continuous_factor).toBe(0.8);
-    expect(rw80.values.design_current_a).toBe(50);
-    const rw100 = run('conductor-size', { load: 40, rating: '100' });
-    expect(rw100.values.continuous_factor).toBe(1);
-    expect(rw100.values.design_current_a).toBe(40);
-    expect(run('conductor-size', { load: 40, continuous: false, method: 'air' }).values.design_current_a).toBe(40);
-    expect(air80.summary.some((l) => l.value.includes('70%'))).toBe(true);
+    expect(run('conductor-size', { load: 35, method: 'air' }).values).toMatchObject({ continuous_factor: 0.7, required_ampacity_a: 50 });
+    expect(run('conductor-size', { load: 35, method: 'air', rating: '100' }).values).toMatchObject({ continuous_factor: 0.85 });
+    expect(run('conductor-size', { load: 35, method: 'air', rating: '100' }).values.required_ampacity_a).toBeCloseTo(41.18, 2);
+    expect(run('conductor-size', { load: 40, method: 'raceway', rating: '100' }).values.continuous_factor).toBe(1);
   });
 
-  // 85 A, 75 C insulation, 45 C ambient (factor sqrt(30/45) = 0.82), 7 conductors (0.70):
-  // 4 AWG 85 x 0.82 x 0.70 = 48.8 A no; 1/0 150 x 0.574 = 86.1 A yes
-  it('derates for ambient temperature and conductor count', () => {
-    const r = run('conductor-size', { load: 85, continuous: false, insulation: '75', termination: '75', ambient: 45, conductors: 7 });
-    expect(r.values.ambient_factor).toBe(0.82);
-    expect(r.values.count_factor).toBe(0.7);
-    expect(r.values.size).toBe('1/0');
-    expect(r.values.corrected_ampacity_a).toBeCloseTo(86.1, 1);
+  // 100 A typed x 0.88 ambient x 0.8 derating = 70.4 A. 56 A continuous needs 70 A: passes. 0.79 derating gives 69.5 A: fails.
+  it('multiplies the typed ambient and derating factors', () => {
+    const r = run('conductor-size', { load: 56, tableAmpacity: 100, ambientFactor: 0.88, derating: 0.8 });
+    expect(r.values.corrected_ampacity_a).toBe(70.4);
+    expect(r.values.passes).toBe(true);
+    const low = run('conductor-size', { load: 56, tableAmpacity: 100, ambientFactor: 0.88, derating: 0.79 });
+    expect(low.values.corrected_ampacity_a).toBe(69.5);
+    expect(low.values.passes).toBe(false);
   });
 
-  it('uses Table 4 for aluminum: 100 A needs 1 AWG (100 A at 75 C)', () => {
-    expect(run('conductor-size', { load: 100, continuous: false, material: 'al', termination: '75' }).values.size).toBe('1');
-  });
-
-  // Free air 14 AWG copper: 90 C 35 A but 75 C termination 30 A; 28 A fits
-  it('uses the free-air tables', () => {
-    const r = run('conductor-size', { load: 28, continuous: false, method: 'air', termination: '75' });
-    expect(r.values.size).toBe('14');
-    expect(r.values.usable_ampacity_a).toBe(30);
+  // Typed 100 A with a 75 A limit at the termination column: the 75 A governs. 50 A non-continuous passes; 80 A fails.
+  it('limits the result to the ampacity at the termination temperature', () => {
+    const r = run('conductor-size', { continuous: false, load: 50, tableAmpacity: 100, terminationAmpacity: 75, termination: '75' });
+    expect(r.values).toMatchObject({ usable_ampacity_a: 75, termination_ampacity_a: 75, passes: true });
+    expect(r.warnings.some((w) => w.includes('governs'))).toBe(true);
+    expect(run('conductor-size', { continuous: false, load: 80, tableAmpacity: 100, terminationAmpacity: 75 }).values.passes).toBe(false);
+    // Termination ampacity above the corrected one does not raise it
+    expect(run('conductor-size', { continuous: false, load: 10, tableAmpacity: 40, terminationAmpacity: 90 }).values.usable_ampacity_a).toBe(40);
   });
 
   it('warns about the small-conductor overcurrent limit and impossible ambient', () => {
-    expect(run('conductor-size', { load: 10, continuous: false }).warnings.some((w) => w.includes('15 A overcurrent'))).toBe(true);
-    const hot = run('conductor-size', { ambient: 70, insulation: '60', termination: '60' });
-    expect(hot.warnings.some((w) => w.includes('no ampacity left'))).toBe(true);
+    const small = run('conductor-size', { size: '12', tableAmpacity: 30 });
+    expect(small.warnings.some((w) => w.includes('20 A') && w.includes('14-104'))).toBe(true);
+    expect(run('conductor-size', { size: '10', material: 'al', tableAmpacity: 30 }).warnings.some((w) => w.includes('25 A'))).toBe(true);
+    expect(run('conductor-size', { tableAmpacity: 30, ambientFactor: 0 }).warnings.some((w) => w.includes('no ampacity'))).toBe(true);
   });
 
-  it('reports when nothing fits', () => {
-    const r = run('conductor-size', { load: 1400, continuous: false });
-    expect(r.values.size).toBeUndefined();
-    expect(r.warnings.some((w) => w.includes('parallel'))).toBe(true);
+  it('takes off wire only when the user also chooses a size, and the size never changes the ampacity', () => {
+    expect(run('conductor-size', { tableAmpacity: 55, length: 10 }).takeoff).toEqual([]); // no size chosen
+    expect(run('conductor-size', { tableAmpacity: 55, size: '8' }).takeoff).toEqual([]); // no length
+    const r = run('conductor-size', { tableAmpacity: 55, size: '8', length: 10, conductors: 3 });
+    expect(r.takeoff).toEqual([expect.objectContaining({ code: 'CU-RW90-8', quantity: 30, unit: 'm' })]);
+    expect(r.values.size).toBe('8');
+    const other = run('conductor-size', { tableAmpacity: 55, size: '500', length: 10, material: 'al' });
+    expect(other.takeoff[0]).toMatchObject({ code: 'AL-RW90-500', quantity: 20 });
+    expect(other.values.usable_ampacity_a).toBe(r.values.usable_ampacity_a);
+    expect(run('conductor-size', { tableAmpacity: 55, size: '300', length: 5 }).takeoff[0].code).toBeUndefined();
   });
 });
 
 describe('conduit-fill', () => {
-  // 3 x 12 AWG + 1 bond 12 AWG RW90 XLPE: diameter 2.34 + 2 x 1.14 = 4.62 mm, area 16.76 mm2 each, 67.1 mm2 total.
-  // 16 mm EMT is 181 mm2, 40% = 72.4 mm2, so 1/2 in at 37%
-  it('picks 1/2 in EMT for four 12 AWG', () => {
+  // 4.5 mm conductors: 4 x pi/4 x 4.5^2 = 4 x 15.904 = 63.62 mm2. 16 mm conduit: 201.06 mm2, so 31.6% against the 40% limit
+  it('checks fill from the diameters you enter', () => {
     const r = run('conduit-fill');
-    expect(r.values.conductor_area_mm2).toBeCloseTo(67.06, 1);
-    expect(r.values.trade_size).toBe('1/2');
-    expect(r.values.limit_pct).toBe(40);
-    expect(r.values.fill_pct).toBeCloseTo(37.05, 0);
+    expect(r.values).toMatchObject({ passes: true, limit_pct: 40, conductors: 4 });
+    expect(r.values.conductor_area_mm2).toBeCloseTo(63.62, 2);
+    expect(r.values.conduit_area_mm2).toBeCloseTo(201.1, 1);
+    expect(r.values.fill_pct).toBeCloseTo(31.64, 2);
+    expect(r.values.allowed_area_mm2).toBeCloseTo(80.4, 1);
+    expect(r.summary[0].value).toBe('Pass');
   });
 
-  // One 500 kcmil RW90: 20.65 + 2 x 1.65 = 23.95 mm, 450.5 mm2 (CEC Table 6A prints 451). 53% rule:
-  // 1-1/4 in EMT 968 x 0.53 = 513 mm2 fits, 1 in 556 x 0.53 = 295 does not
+  // One 12 mm conductor: 113.1 / 201.06 = 56.2% fails 53%; a 10 mm one is 78.54 / 201.06 = 39.1% and passes
   it('uses 53% for one conductor', () => {
-    const r = run('conduit-fill', { size1: '500', count1: 1, count2: 0 });
-    expect(r.values.limit_pct).toBe(53);
-    expect(r.values.conductor_area_mm2).toBeCloseTo(450.5, 0);
-    expect(r.values.trade_size).toBe('1-1/4');
+    const fail = run('conduit-fill', { count: 1, conductorOd: 12 });
+    expect(fail.values.limit_pct).toBe(53);
+    expect(fail.values.fill_pct).toBeCloseTo(56.25, 1);
+    expect(fail.values.passes).toBe(false);
+    expect(fail.warnings.some((w) => w.includes('over the 53% limit'))).toBe(true);
+    expect(run('conduit-fill', { count: 1, conductorOd: 10 }).values).toMatchObject({ passes: true });
   });
 
+  // Two 6 mm: 56.55 / 201.06 = 28.1% passes 31%; two 8 mm: 100.5 / 201.06 = 50% fails.
+  // Three 5.8 mm: 79.27 / 201.06 = 39.4% passes 40%; three 6 mm: 84.82 / 201.06 = 42.2% fails.
   it('uses 31% for two conductors and 40% beyond', () => {
-    expect(run('conduit-fill', { count1: 2, count2: 0 }).values.limit_pct).toBe(31);
-    expect(run('conduit-fill', { count1: 5, count2: 0 }).values.limit_pct).toBe(40);
+    expect(run('conduit-fill', { count: 2, conductorOd: 6 }).values).toMatchObject({ limit_pct: 31, passes: true });
+    expect(run('conduit-fill', { count: 2, conductorOd: 8 }).values).toMatchObject({ limit_pct: 31, passes: false });
+    expect(run('conduit-fill', { count: 3, conductorOd: 5.8 }).values).toMatchObject({ limit_pct: 40, passes: true });
+    expect(run('conduit-fill', { count: 3, conductorOd: 6 }).values).toMatchObject({ limit_pct: 40, passes: false });
   });
 
-  it('prices T90 Nylon as RW90 wire and gives smaller areas than RW90', () => {
-    const nylon = run('conduit-fill', { wire: 'nylon', size1: '10', count1: 6, count2: 0 });
-    const xlpe = run('conduit-fill', { wire: 'rw90', size1: '10', count1: 6, count2: 0 });
-    expect(Number(nylon.values.conductor_area_mm2)).toBeLessThan(Number(xlpe.values.conductor_area_mm2));
-    expect(nylon.takeoff.find((t) => t.code === 'CU-RW90-10')?.note).toContain('T90 Nylon');
-  });
-
-  // 15 m run, couplings every 3 m = ceil(15/3) - 1 = 4 per run, 2 connectors per run, 4 conductors x 15 m of 12 AWG = 60 m
-  it('takes off conduit, couplings, connectors and wire', () => {
+  // Smallest internal diameter: OD x sqrt(n / limit) = 4.5 x sqrt(4 / 0.4) = 14.23 mm. A conduit of that diameter is exactly full to the limit.
+  // Most conductors of 4.5 mm in 16 mm: 5 x 15.904 = 79.5 <= 80.4, but 6 x 15.904 = 95.4 is over
+  it('reports the smallest internal diameter and the most conductors that fit', () => {
     const r = run('conduit-fill');
-    const q = (code: string) => r.takeoff.find((t) => t.code === code)?.quantity;
-    expect(q('EMT-1/2')).toBe(15);
-    expect(q('EMT-COUP-1/2')).toBe(4);
-    expect(q('EMT-CONN-1/2')).toBe(2);
-    expect(q('CU-RW90-12')).toBe(60);
-    const two = run('conduit-fill', { runs: 2 });
-    expect(two.takeoff.find((t) => t.code === 'EMT-COUP-1/2')?.quantity).toBe(8);
-    expect(two.takeoff.find((t) => t.code === 'EMT-CONN-1/2')?.quantity).toBe(4);
+    expect(r.values.min_conduit_id_mm).toBeCloseTo(14.23, 2);
+    expect(r.values.max_conductors).toBe(5);
+    const exact = run('conduit-fill', { conduitId: Number(r.values.min_conduit_id_mm) });
+    expect(exact.values.fill_pct).toBeCloseTo(40, 0);
   });
 
-  it('falls back to code-less lines for sizes the catalog does not carry', () => {
-    const r = run('conduit-fill', { conduit: 'pvc', size1: '4/0', count1: 3, count2: 0 }); // PVC 1-1/4 has no catalog code
-    expect(r.values.trade_size).toBeDefined();
-    const conduit = r.takeoff[0];
-    if (r.values.trade_size === '1-1/4') expect(conduit.code).toBeUndefined();
+  it('takes off conduit, couplings, connectors and wire, from the trade size chosen for pricing', () => {
+    const r = run('conduit-fill'); // 15 m of 1/2 in EMT: 4 couplings (every 3 m, less one), 2 connectors, 4 x 15 m of 12 AWG
+    expect(r.takeoff.map((t) => t.code)).toEqual(['EMT-1/2', 'EMT-COUP-1/2', 'EMT-CONN-1/2', 'CU-RW90-12']);
+    expect(r.takeoff.map((t) => t.quantity)).toEqual([15, 4, 2, 60]);
+    const runs = run('conduit-fill', { runs: 2, length: 10, tradeSize: '1', conduit: 'pvc', count: 3 });
+    expect(runs.takeoff[0]).toMatchObject({ code: 'PVC-1', quantity: 20 });
+    expect(runs.takeoff.find((t) => t.code === 'CU-RW90-12')!.quantity).toBe(60);
   });
 
-  it('says when the conductors cannot fit', () => {
-    const r = run('conduit-fill', { size1: '500', count1: 100, count2: 0 });
-    expect(r.values.trade_size).toBeUndefined();
-    expect(r.warnings.some((w) => w.includes('4 in conduit'))).toBe(true);
+  it('falls back to code-less lines for trade sizes the catalog does not carry, and the trade size does not change the fill', () => {
+    const r = run('conduit-fill', { tradeSize: '3', conduit: 'pvc' });
+    expect(r.takeoff[0].code).toBeUndefined();
+    expect(r.takeoff[0].description).toContain('3 in');
+    expect(r.values.fill_pct).toBe(run('conduit-fill').values.fill_pct);
+  });
+
+  it('says so when there are no conductors, and when they do not fit', () => {
+    const none = run('conduit-fill', { count: 0 });
+    expect(none.warnings.some((w) => w.includes('at least one conductor'))).toBe(true);
+    expect(none.values.passes).toBeUndefined();
+    const big = run('conduit-fill', { count: 30, conductorOd: 10 });
+    expect(big.values.passes).toBe(false);
+    expect(big.warnings.some((w) => w.includes('internal diameter of at least'))).toBe(true);
   });
 });
 
 describe('box-fill', () => {
-  // 4 x 14 AWG (4 x 24.6 = 98.4) + bonding (24.6) + one device (2 x 24.6 = 49.2) = 172.2 mL; 3 x 2 x 2-1/2 holds 204 mL
-  it('adds conductors, bonding and a device (Table 22)', () => {
-    const r = run('box-fill');
-    expect(r.values.required_ml).toBeCloseTo(172.2, 1);
-    expect(r.values.passes).toBe(true);
-    expect(r.values.box_id).toBe('dev-3x2x2.5');
-    expect(r.takeoff[0]).toMatchObject({ code: 'BOX-DEVICE', quantity: 1 });
+  // Illustrative allowances: 4 x 14 AWG at 24 mL = 96, one device at 48 = 48, box marked 200 mL: required 144, 56 mL left
+  it('adds the allowances you enter and compares them with the marked volume', () => {
+    const r = run('box-fill', { boxMl: 200, ml14: 24, deviceMl: 48 });
+    expect(r.values).toMatchObject({ required_ml: 144, conductors_ml: 96, devices_ml: 48, box_ml: 200, remaining_ml: 56, passes: true });
+    expect(r.summary[0].value).toBe('Pass');
   });
 
-  // 6 x 12 AWG = 172.2; 2 devices = 4 x 28.7 = 114.8; bonding 28.7; total 315.7 mL -> needs the 344 mL 4 in square or larger
-  it('uses the largest conductor for devices and mixed sizes', () => {
-    const r = run('box-fill', { n14: 0, n12: 6, devices: 2 });
-    expect(r.values.required_ml).toBeCloseTo(315.7, 1);
-    expect(r.values.box_id).toBe('sq-1.5'); // the 344 mL octagon is skipped because it cannot hold devices
-    expect(run('box-fill', { n14: 3, bonding: false, devices: 0 }).values.box_id).toBe('dev-3x2x1.5');
+  // 3 x 14 AWG at 24 = 72; 2 x 12 AWG at 28 = 56; 1 device at 56; 2 clamp sets at 12 = 24; other 10: total 218 mL
+  it('handles mixed sizes, devices, clamps and other allowances', () => {
+    const r = run('box-fill', { boxMl: 218, n14: 3, ml14: 24, n12: 2, ml12: 28, devices: 1, deviceMl: 56, clamps: 2, clampMl: 12, otherMl: 10 });
+    expect(r.values).toMatchObject({ required_ml: 218, clamps_ml: 24, remaining_ml: 0, passes: true });
+    expect(run('box-fill', { boxMl: 217.9, n14: 3, ml14: 24, n12: 2, ml12: 28, devices: 1, deviceMl: 56, clamps: 2, clampMl: 12, otherMl: 10 }).values.passes).toBe(false);
   });
 
-  it('fails a box that is too small and says which box to use', () => {
-    const r = run('box-fill', { box: 'dev-3x2x1.5' });
+  it('fails a box that is too small and says so', () => {
+    const r = run('box-fill', { boxMl: 100, ml14: 24, deviceMl: 48 });
     expect(r.values.passes).toBe(false);
-    expect(r.takeoff).toEqual([]);
-    expect(r.warnings[0]).toContain('131 mL');
+    expect(r.summary[0].value).toBe('Fail');
+    expect(r.values.remaining_ml).toBe(-44);
+    expect(r.warnings.some((w) => w.includes('Use a larger box'))).toBe(true);
   });
 
-  // Pairs of wire connectors: 5 connectors = 2 allowances; hickey = 1; deep device 1 x 32 x 4 cm = 128 mL
-  it('counts connector pairs, fixture studs and deep devices', () => {
-    const base = Number(run('box-fill', { n14: 2, bonding: false, devices: 0 }).values.required_ml);
-    expect(base).toBeCloseTo(49.2, 1);
-    expect(Number(run('box-fill', { n14: 2, bonding: false, devices: 0, connectors: 5 }).values.required_ml)).toBeCloseTo(49.2 + 2 * 24.6, 1);
-    expect(Number(run('box-fill', { n14: 2, bonding: false, devices: 0, studs: 1 }).values.required_ml)).toBeCloseTo(49.2 + 24.6, 1);
-    expect(Number(run('box-fill', { n14: 2, bonding: false, devices: 0, deepDevices: 1, deepDepth: 4 }).values.required_ml)).toBeCloseTo(49.2 + 128, 1);
-  });
-
-  it('labels the NEC-style allowances as a conservative estimate to confirm against Rule 12-3034', () => {
+  it('ships no volumes: defaults need the box volume and the allowances typed in', () => {
     const r = run('box-fill');
-    expect(r.warnings.some((w) => w.includes('conservative estimate') && w.includes('Rule 12-3034'))).toBe(true);
+    expect(r.values.required_ml).toBe(0);
+    expect(r.values.passes).toBeUndefined();
+    expect(r.summary[0].value).toBe('Enter the box volume');
+    expect(r.warnings.some((w) => w.includes('no allowance was entered for 14 AWG'))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('no allowance per device'))).toBe(true);
+    expect(r.takeoff).toEqual([]);
   });
 
-  it('accepts a marked volume and a quantity', () => {
-    const r = run('box-fill', { customMl: 500, qty: 12 });
-    expect(r.values.box_ml).toBe(500);
-    expect(r.takeoff[0]).toMatchObject({ quantity: 12 });
-    expect(run('box-fill', { n14: 40, n12: 40, n10: 40, n8: 40, n6: 40, devices: 12 }).warnings.some((w) => w.includes('larger junction box'))).toBe(true);
+  it('warns about counted clamps without an allowance', () => {
+    expect(run('box-fill', { boxMl: 100, clamps: 1 }).warnings.some((w) => w.includes('no allowance per clamp set'))).toBe(true);
+  });
+
+  it('prices only a box the user chose, and only when it passes', () => {
+    const ok = run('box-fill', { boxMl: 500, ml14: 24, deviceMl: 48, boxType: 'BOX-4SQ', qty: 3 });
+    expect(ok.takeoff).toEqual([expect.objectContaining({ code: 'BOX-4SQ', quantity: 3, unit: 'ea' })]);
+    expect(run('box-fill', { boxMl: 100, ml14: 24, deviceMl: 48, boxType: 'BOX-4SQ' }).takeoff).toEqual([]);
+    expect(run('box-fill', { boxMl: 500, ml14: 24, deviceMl: 48 }).takeoff).toEqual([]);
   });
 });
 
 describe('motor-circuit', () => {
-  // CEC Appendix B example: 30 hp at 575 V is 32 A (Table 44); x 125% = 40 A; Table 2 at 75 C = 8 AWG (50 A)
-  it('reproduces the CEC 30 hp example', () => {
-    const r = run('motor-circuit', { hp: '30', supply: '3ph-600' });
-    expect(r.values.fla_a).toBe(32);
-    expect(r.values.min_conductor_ampacity_a).toBe(40);
-    expect(r.values.conductor_size).toBe('8');
-    // inverse-time breaker 250% x 32 = 80 A; NEMA size 3 (30 hp at 575 V). The overload is set from the nameplate, so none without one
-    expect(r.values.max_device_a).toBe(80);
-    expect(r.values.overload_a).toBeUndefined();
-    // with a 32 A nameplate and a service factor of 1.15 or more: 125% x 32 = 40 A
-    expect(run('motor-circuit', { hp: '30', supply: '3ph-600', nameplate: 32 }).values.overload_a).toBe(40);
-    expect(r.values.starter_size).toBe('3');
-    expect(r.takeoff.some((t) => t.code === 'STARTER-NEMA1')).toBe(false);
-  });
-
-  // 100 hp at 575 V is 99 A; x 125% = 124 A; 1 AWG at 75 C is 130 A
-  it('reproduces the CEC 100 hp example', () => {
-    const r = run('motor-circuit', { hp: '100', supply: '3ph-600' });
-    expect(r.values.fla_a).toBe(99);
-    expect(r.values.conductor_size).toBe('1');
-  });
-
-  // 5 hp 575 V: 6.1 A, 7.6 A conductor -> 14 AWG, breaker 250% = 15.25 -> 15 A, size 0 starter takes the size 1 catalog item
-  it('sizes a 5 hp 600 V motor and takes off Teck90, starter and disconnect', () => {
+  it('asks for the code book full-load current and percentage on the defaults', () => {
     const r = run('motor-circuit');
-    expect(r.values.fla_a).toBe(6.1);
-    expect(r.values.conductor_size).toBe('14');
+    expect(r.summary[0].value).toBe('Enter the full-load current');
+    expect(r.values.max_device_a).toBeUndefined();
+    expect(r.values.starter_size).toBe('0'); // NEMA sizing needs no code book table: 5 hp at 600 V
+    expect(r.takeoff.map((t) => t.code)).toEqual(['STARTER-NEMA1']);
+    expect(r.warnings.some((w) => w.includes('Enter the full-load current'))).toBe(true);
+  });
+
+  // Typed 32 A: x 125% = 40 A minimum conductor ampacity; typed 250% device: 32 x 2.5 = 80 A; 30 hp at 600 V is NEMA size 3
+  it('applies 125% to the full-load current, the typed percentage to the device, and sizes the starter', () => {
+    const r = run('motor-circuit', { hp: '30', supply: '3ph-600', tableFla: 32, maxPct: 250 });
+    expect(r.values).toMatchObject({ fla_a: 32, min_conductor_ampacity_a: 40, max_device_pct: 250, max_device_a: 80, std_device_a: 80, starter_size: '3' });
+    expect(r.values.overload_a).toBeUndefined();
+    expect(r.takeoff.some((t) => t.code === 'STARTER-NEMA1')).toBe(false);
+    expect(run('motor-circuit', { hp: '30', supply: '3ph-600', tableFla: 32, nameplate: 32 }).values.overload_a).toBe(40);
+  });
+
+  // Typed 99 A x 125% = 123.75 A. A typed conductor ampacity of 130 A passes; 120 A fails
+  it('checks a conductor ampacity you enter against 125%', () => {
+    const base = { hp: '100', supply: '3ph-600', tableFla: 99 };
+    const ok = run('motor-circuit', { ...base, conductorAmpacity: 130 });
+    expect(ok.values).toMatchObject({ min_conductor_ampacity_a: 123.75, conductor_passes: true });
+    const bad = run('motor-circuit', { ...base, conductorAmpacity: 120 });
+    expect(bad.values.conductor_passes).toBe(false);
+    expect(bad.warnings.some((w) => w.includes('below the 123.8 A required'))).toBe(true);
+    expect(run('motor-circuit', base).values.conductor_passes).toBeUndefined();
+  });
+
+  // Typed 6.1 A, 250%: 15.25 A so the 15 A standard rating; NEMA size 0 starter takes the size 1 catalog item; priced Teck90 12/3 for 20 m
+  it('takes off Teck90 only for the size the user chose, plus starter and disconnect', () => {
+    const r = run('motor-circuit', { tableFla: 6.1, maxPct: 250, conductorSize: '12' });
     expect(r.values.std_device_a).toBe(15);
     expect(r.values.starter_size).toBe('0');
     expect(r.takeoff.map((t) => t.code)).toEqual(['TECK90-12-3', 'STARTER-NEMA1', 'DISC-100A']);
     expect(r.takeoff[0].quantity).toBe(20);
+    expect(run('motor-circuit', { tableFla: 6.1, conductorSize: '1/0' }).takeoff[0].code).toBeUndefined(); // no catalog Teck90 1/0
+    expect(run('motor-circuit', { tableFla: 6.1 }).takeoff.some((t) => t.description.includes('Teck90'))).toBe(false);
   });
 
-  // Single-phase 2 hp at 230 V: 12 A (Table 45); 15 A conductor -> 14 AWG
-  it('uses Table 45 for single-phase motors', () => {
-    const r = run('motor-circuit', { hp: '2', supply: '1ph-240' });
-    expect(r.values.fla_a).toBe(12);
-    expect(r.values.conductor_size).toBe('14');
-    expect(r.takeoff.some((t) => t.code === 'DISC-60A')).toBe(true);
+  it('sizes single-phase starters and disconnects from the typed current', () => {
+    const r = run('motor-circuit', { hp: '2', supply: '1ph-240', tableFla: 12 });
+    expect(r.values.starter_size).toBe('0'); // NEMA size 0 is rated for 2 hp at 230 V single-phase
+    expect(r.takeoff.some((t) => t.code === 'DISC-60A')).toBe(true); // 12 x 1.15 = 13.8 A
   });
 
   it('shows no overload figure without a nameplate and warns', () => {
-    const r = run('motor-circuit', { hp: '5', supply: '3ph-600' });
+    const r = run('motor-circuit', { tableFla: 6.1 });
     expect(r.values.overload_a).toBeUndefined();
     expect(r.summary.find((l) => l.label === 'Overload setting')!.value).toContain('nameplate');
     expect(r.warnings.some((w) => w.includes('No nameplate current entered'))).toBe(true);
-    expect(r.values.fla_a).toBe(r.values.table_fla_a); // conductor still sized from the table current
-    expect(r.values.min_conductor_ampacity_a).toBeCloseTo(Number(r.values.table_fla_a) * 1.25, 2);
+    expect(r.values.fla_a).toBe(r.values.table_fla_a); // conductor still sized from the code book current
+    expect(r.values.min_conductor_ampacity_a).toBeCloseTo(6.1 * 1.25, 2);
   });
 
   it('sets the overload at 125% of nameplate with a service factor of 1.15 or more', () => {
-    const r = run('motor-circuit', { nameplate: 10, sf: true });
-    expect(r.values.overload_a).toBeCloseTo(12.5, 2);
+    expect(run('motor-circuit', { nameplate: 10, sf: true }).values.overload_a).toBeCloseTo(12.5, 2);
   });
 
   it('uses the nameplate for the overload, 115% without the service factor', () => {
-    const r = run('motor-circuit', { nameplate: 10, sf: false });
+    const r = run('motor-circuit', { nameplate: 10, sf: false, tableFla: 6.1 });
     expect(r.values.overload_a).toBeCloseTo(11.5, 2);
     expect(r.values.fla_a).toBe(10);
     expect(r.values.table_fla_a).toBe(6.1);
   });
 
-  it('moves a rating not in the table to the next listed one with a warning', () => {
-    const r = run('motor-circuit', { hp: '0.25', supply: '3ph-480' });
-    expect(r.values.hp).toBe(0.5);
-    expect(r.warnings.some((w) => w.includes('next listed'))).toBe(true);
+  it('needs the code book current as well as the nameplate for the maximum device', () => {
+    const r = run('motor-circuit', { nameplate: 10, maxPct: 250 });
+    expect(r.values.max_device_a).toBeUndefined();
+    expect(r.warnings.some((w) => w.includes('Only the nameplate current was entered'))).toBe(true);
   });
 
-  it('applies the fuse percentages of Table 29', () => {
-    expect(run('motor-circuit', { hp: '10', device: 'delay' }).values.max_device_pct).toBe(175);
-    expect(run('motor-circuit', { hp: '10', device: 'fuse' }).values.max_device_a).toBeCloseTo(33, 0); // 11 A x 300%
+  // Typed 11 A: 175% = 19.25 A (15 A standard), 300% = 33 A (30 A standard)
+  it('uses whatever percentage is typed, whatever the device type', () => {
+    expect(run('motor-circuit', { tableFla: 11, device: 'delay', maxPct: 175 }).values).toMatchObject({ max_device_pct: 175, std_device_a: 15 });
+    const f = run('motor-circuit', { tableFla: 11, device: 'fuse', maxPct: 300 });
+    expect(f.values.max_device_a).toBeCloseTo(33, 1);
+    expect(f.values.std_device_a).toBe(30);
+    expect(f.summary.find((l) => l.label === 'Maximum breaker or fuse')!.value).toContain('non-time-delay fuse');
   });
 });
 
@@ -504,24 +579,45 @@ describe('residential-wiring-takeoff', () => {
   });
 });
 
+
 describe('ev-charger-circuit', () => {
-  // 40 A x 125% = 50 A: 50 A breaker, 8 AWG (50 A at 75 C); 15 m = 49.2 ft, drop = 2 x 40 x 49.2 x 0.000778 = 3.06 V = 1.28%
-  it('sizes a 40 A charger at 125%', () => {
+  // 40 A x 125% = 50 A: 50 A breaker. No size is chosen by default, so no wire and no ampacity claim.
+  // 12 AWG over 15 m: 2 x 40 x 15 x 0.006464 = 7.76 V = 3.23% of 240 V (over 3%); 10 AWG (0.004065): 4.88 V = 2.03%, the smallest within 3%
+  it('sizes the breaker at 125% and takes the conductor from the user, never from a table', () => {
     const r = run('ev-charger-circuit');
-    expect(r.values.breaker_a).toBe(50);
+    expect(r.values).toMatchObject({ breaker_a: 50, required_ampacity_a: 50, min_size_for_drop: '10' });
+    expect(r.values.conductor_size).toBeUndefined();
+    expect(r.takeoff.map((t) => t.code)).toEqual(['EVSE-L2-48A', 'BKR-2P-50A']);
+    expect(r.warnings.some((w) => w.includes('Choose a conductor size'))).toBe(true);
+  });
+
+  // 8 AWG (0.002557 ohm/m): 2 x 40 x 15 x 0.002557 = 3.07 V = 1.28%. Priced 3 x 15 m = 45 m
+  it('computes the drop and prices the size the user chose', () => {
+    const r = run('ev-charger-circuit', { size: '8' });
     expect(r.values.conductor_size).toBe('8');
     expect(r.values.voltage_drop_pct).toBeCloseTo(1.28, 2);
     expect(r.takeoff.map((t) => t.code)).toEqual(['EVSE-L2-48A', 'BKR-2P-50A', 'CU-RW90-8']);
     expect(r.takeoff[2].quantity).toBe(45);
   });
 
-  // 48 A x 125% = 60 A. 6 AWG (65 A) carries it, but over 60 m (196.9 ft): 2 x 48 x 196.9 x 0.000491 = 9.28 V = 3.87% > 3%,
-  // so 4 AWG (0.000308): 5.82 V = 2.43% is chosen. Service 100 A with 80 A used leaves 20 A, 28 A short
-  it('upsizes for voltage drop and flags a service shortfall with the EVEMS option', () => {
-    const r = run('ev-charger-circuit', { charger: 48, distance: 60, existing: 80 });
+  // Typed conductor ampacity 55 A covers 50 A; 45 A does not, and is also below the 50 A breaker
+  it('checks a conductor ampacity the user typed against 125%', () => {
+    expect(run('ev-charger-circuit', { size: '8', conductorAmpacity: 55 }).values.conductor_passes).toBe(true);
+    const bad = run('ev-charger-circuit', { size: '8', conductorAmpacity: 45 });
+    expect(bad.values.conductor_passes).toBe(false);
+    expect(bad.warnings.some((w) => w.includes('below the 50 A required'))).toBe(true);
+    expect(bad.warnings.some((w) => w.includes('50 A breaker is above'))).toBe(true);
+    expect(run('ev-charger-circuit').values.conductor_passes).toBeUndefined();
+  });
+
+  // 48 A x 125% = 60 A. 6 AWG over 60 m (0.001608 ohm/m): 2 x 48 x 60 x 0.001608 = 9.26 V = 3.86%, over 3%; 4 AWG (0.001011 ohm/m): 5.83 V = 2.43%, the smallest within 3%.
+  // Service 100 A with 80 A used leaves 20 A, 28 A short
+  it('flags a drop over 3% and a service shortfall with the EVEMS option', () => {
+    const r = run('ev-charger-circuit', { charger: 48, distance: 60, existing: 80, size: '6' });
     expect(r.values.breaker_a).toBe(60);
-    expect(r.values.conductor_size).toBe('4');
-    expect(r.values.voltage_drop_pct).toBeCloseTo(2.43, 2);
+    expect(r.values.voltage_drop_pct).toBeCloseTo(3.86, 2);
+    expect(r.values.min_size_for_drop).toBe('4');
+    expect(r.warnings.some((w) => w.includes('over 3%'))).toBe(true);
     expect(r.values.short_a).toBe(28);
     expect(r.values.evems_needed).toBe(true);
     expect(r.warnings.some((w) => w.includes('energy management'))).toBe(true);
@@ -533,10 +629,13 @@ describe('ev-charger-circuit', () => {
     const r = run('ev-charger-circuit', { charger: 56 }); // 70 A breaker
     expect(r.values.breaker_a).toBe(70);
     expect(r.takeoff.find((t) => t.description.includes('70 A'))?.code).toBeUndefined();
-    const al = run('ev-charger-circuit', { material: 'al' });
+    const al = run('ev-charger-circuit', { material: 'al', size: '6' });
     expect(al.takeoff.find((t) => t.unit === 'm')?.code).toBeUndefined(); // 6 AWG aluminum has no catalog code
+    expect(run('ev-charger-circuit', { material: 'al', size: '1/0' }).takeoff.find((t) => t.unit === 'm')?.code).toBe('AL-RW90-1/0');
+    expect(run('ev-charger-circuit', { material: 'al', size: '14' }).values.conductor_size).toBeUndefined();
   });
 });
+
 
 describe('transformer-sizing', () => {
   // 30 kVA + 20% = 36 kVA -> 45 kVA. Primary 45,000 / (1.732 x 600) = 43.3 A; secondary 45,000 / (1.732 x 208) = 124.9 A
