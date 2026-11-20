@@ -3,6 +3,7 @@ import { jsonError, requireApi } from '@/lib/api';
 import { MAX_REQUEST_BYTES, InputError, friendlyError, generateDraft, priceDraft, readScopeForm } from '@/lib/ai-estimate';
 import { loadCompanyPrices } from '@/lib/company-prices';
 import { getModule } from '@/lib/modules';
+import { consumeUserRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
     if (err instanceof InputError) return jsonError(400, err.message);
     return jsonError(400, 'Invalid request');
   }
+
+  // The hourly per-user AI limit every paid AI call shares (CLAUDE.md), then the company's daily allowance
+  if (!(await consumeUserRateLimit(ctx.supabase, 'ai'))) return jsonError(429, 'You have drafted a lot of estimates this hour. Try again later.');
 
   // Same daily allowance as the assistant
   const { data: usage, error: usageError } = await ctx.supabase.rpc('consume_ai_message').single<{ allowed: boolean; used: number; daily_limit: number }>();

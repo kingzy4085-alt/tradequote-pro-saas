@@ -1,0 +1,77 @@
+import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { requireApi } from '@/lib/api';
+
+function getGeminiClient() {
+  const key = (process.env.GEMINI_API_KEY ?? '').trim();
+  return key ? new GoogleGenerativeAI(key) : null;
+}
+
+export async function POST(request: Request) {
+  try {
+    // requireApi returns (not throws) the 401/402/403 response, so it has to be checked
+    const ctx = await requireApi({ minRank: 20, write: true });
+    if (ctx instanceof Response) return ctx;
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return NextResponse.json({ success: false, error: 'No file uploaded' }, { status: 400 });
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64Data = buffer.toString('base64');
+
+    const genAI = getGeminiClient();
+    if (!genAI) {
+      return NextResponse.json({ success: false, error: 'AI extraction is not configured' }, { status: 503 });
+    }
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const prompt = `Analyze the following scope document and extract:
+1. Estimated Labor (in hours)
+2. Estimated Material Cost (in CAD)
+3. A summary of the scope of work
+
+Return ONLY a JSON object with this structure:
+{
+  "estimatedLabor": number,
+  "estimatedMaterials": number,
+  "description": string
+}
+`;
+
+    const result = await model.generateContent([
+        {
+            inlineData: {
+                data: base64Data,
+                mimeType: file.type
+            }
+        },
+        prompt
+    ]);
+
+    const responseText = result.response.text();
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error("Failed to parse AI response as JSON");
+    }
+
+    const data = JSON.parse(jsonMatch[0]);
+
+    return NextResponse.json({
+      success: true,
+      data
+    });
+  } catch (err: any) {
+    console.error("AI Extraction Error:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
+
+
+

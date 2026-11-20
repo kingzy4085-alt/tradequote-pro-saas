@@ -1,6 +1,5 @@
 // Voice-to-estimate: the parsing in lib/voice-estimate.ts, the /api/ai/parse-voice route with the AI
-// and Supabase mocked, and the 'ai' rate-limit bucket on real Postgres. (/api/ai/extract-scope was
-// replaced by /api/ai/estimate, whose sign-in, role and lapsed-trial refusals are in tests/ai-estimate.test.ts.)
+// and Supabase mocked, the auth fix on /api/ai/extract-scope, and the 'ai' rate-limit bucket on real Postgres.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeSupabase } from './helpers/fake-supabase';
 import { bootDb, type TestDb } from './helpers/db';
@@ -24,6 +23,7 @@ vi.mock('@google/generative-ai', async (importOriginal) => {
 });
 
 import { POST as parseVoice } from '@/app/api/ai/parse-voice/route';
+import { POST as extractScope } from '@/app/api/ai/extract-scope/route';
 import { MAX_VOICE_BYTES, MAX_VOICE_LINES, normalizeAudioType, parseVoiceResult, referenceCatalog, toEstimateLines, voicePrompt } from '@/lib/voice-estimate';
 
 const USER = { id: '00000000-0000-4000-8000-00000000070a', email: 'owner@alpha.ca' };
@@ -235,6 +235,17 @@ describe('POST /api/ai/parse-voice', () => {
 
     mocks.generate.mockResolvedValueOnce({ response: { text: () => 'no json here' } });
     expect((await parseVoice(upload(audio()))).status).toBe(502);
+  });
+});
+
+describe('POST /api/ai/extract-scope auth', () => {
+  it('refuses signed-out callers before calling the AI', async () => {
+    signedOut();
+    const form = new FormData();
+    form.append('file', new Blob(['scope'], { type: 'text/plain' }), 'scope.txt');
+    const res = await extractScope(new Request('http://localhost/api/ai/extract-scope', { method: 'POST', body: form }));
+    expect(res.status).toBe(401);
+    expect(mocks.generate).not.toHaveBeenCalled();
   });
 });
 

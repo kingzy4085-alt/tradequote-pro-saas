@@ -1,5 +1,6 @@
 'use client';
 
+import { AiScopeUpload } from '@/components/estimates/AiScopeUpload';
 import { VoiceEstimateRecorder } from '@/components/estimates/VoiceEstimateRecorder';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -44,6 +45,18 @@ export default function EstimateEditor({
   province?: string;
   canWrite: boolean;
 }) {
+  const handleScopeExtracted = (data: { estimatedLabor: number; estimatedMaterials: number; description: string }) => {
+    editHeader('scope', data.description);
+    const newLine: EstimateLine = {
+      description: 'AI Scope: ' + (data.description.length > 60 ? data.description.substring(0, 60) + '...' : data.description),
+      quantity: 1,
+      unit: 'item',
+      material_unit_cost: data.estimatedMaterials,
+      labour_hours_per_unit: data.estimatedLabor,
+    };
+    editItems([...items, newLine]);
+  };
+
   const router = useRouter();
   const [converting, setConverting] = useState(false);
   // What the client was shown can't move under them. The database refuses it too.
@@ -278,12 +291,10 @@ export default function EstimateEditor({
 
   return (
     <>
-      {/* Scope documents and drawings go through the AI draft panel below the lines; voice notes start here */}
-      {canEditLines && (
-        <div className="mb-6">
-          <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />
-        </div>
-      )}
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        {canEditLines && <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />}
+        <AiScopeUpload onExtracted={handleScopeExtracted} />
+      </div>
       <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}

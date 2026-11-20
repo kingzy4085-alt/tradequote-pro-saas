@@ -34,11 +34,17 @@ const COMPANY = {
 };
 const ITEM = CATALOG[0];
 
-function signedIn(opts: { role?: string; company?: Record<string, unknown>; tables?: Record<string, Record<string, unknown>[]>; usage?: object | null; usageError?: boolean } = {}) {
+function signedIn(opts: { role?: string; company?: Record<string, unknown>; tables?: Record<string, Record<string, unknown>[]>; usage?: object | null; usageError?: boolean; hourlyLimitReached?: boolean } = {}) {
   const usage = opts.usage === undefined ? { allowed: true, used: 1, daily_limit: 50 } : opts.usage;
   const fake = fakeSupabase({ company_users: [{ user_id: USER.id, role: opts.role ?? 'project_manager', company: opts.company ?? COMPANY }], ...opts.tables });
-  const rpc = vi.fn((_name: string) => {
-    const result = opts.usageError ? { data: null, error: { message: 'secret db detail' } } : { data: usage, error: null };
+  const rpc = vi.fn((name: string) => {
+    // consume_user_rate_limit('ai') is the hourly per-user limit; consume_ai_message is the daily allowance
+    const result =
+      name === 'consume_user_rate_limit'
+        ? { data: !opts.hourlyLimitReached, error: null }
+        : opts.usageError
+          ? { data: null, error: { message: 'secret db detail' } }
+          : { data: usage, error: null };
     return Object.assign(Promise.resolve(result), { single: () => Promise.resolve(result) });
   });
   const client = Object.assign(fake, { rpc, auth: { getUser: async () => ({ data: { user: USER }, error: null }) } });
@@ -103,6 +109,16 @@ describe('who may draft', () => {
     const res = await post();
     expect(res.status).toBe(402);
     expect(client.rpc).not.toHaveBeenCalled();
+    expect(called()).toBe(0);
+  });
+
+  it("stops at the hourly 'ai' limit before spending the daily allowance or calling the model", async () => {
+    const client = signedIn({ hourlyLimitReached: true });
+    const res = await post();
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toContain('this hour');
+    expect(client.rpc).toHaveBeenCalledWith('consume_user_rate_limit', { p_bucket: 'ai' });
+    expect(client.rpc).not.toHaveBeenCalledWith('consume_ai_message');
     expect(called()).toBe(0);
   });
 
