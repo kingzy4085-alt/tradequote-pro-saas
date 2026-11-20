@@ -276,3 +276,11 @@ describe('errors never leak internals', () => {
     expect((await post()).status).toBe(503);
   });
 });
+
+describe('estimate prompt guardrails', () => {
+  it('forbids code numbers and requires unchecked size assumptions', async () => {
+    const { ESTIMATE_SYSTEM_PROMPT } = await import('@/lib/ai-estimate');
+    expect(ESTIMATE_SYSTEM_PROMPT).toContain('Never cite a code rule number, section or table number in any field');
+    expect(ESTIMATE_SYSTEM_PROMPT).toContain('size assumed, not checked against the code');
+  });
+});

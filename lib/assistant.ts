@@ -9,6 +9,7 @@ import { escapeSearch } from '@/lib/crud';
 import { CATALOG, COSTBOOK_AS_OF, billingRate, getItem, getRegion, labourCost, priceItem, priceTakeoff, salesTax, searchCatalog } from '@/lib/costbook';
 import { TRADES } from '@/lib/costbook/types';
 import type { CompanyPrice, LabourClass, ShopType } from '@/lib/costbook';
+import type { Trade } from '@/lib/costbook/types';
 import { CALCULATORS, getCalculator, inputSchema } from '@/lib/calc/registry';
 import type { Calculator } from '@/lib/calc/registry';
 import { loadCompanyPrices } from '@/lib/company-prices';
@@ -65,8 +66,8 @@ How to answer
 - You give general information, not a stamped engineering opinion or a ruling. When the answer affects safety or compliance, tell the user to confirm with the authority having jurisdiction, the engineer of record, or the current code book.
 - Material prices: you do not have live supplier pricing. Never invent a price, a labour rate or a labour unit. For anything priced, call lookup_costs. Its reference prices are retail baselines for the company's region, dated ${COSTBOOK_AS_OF} (each item also carries its own source and date), not a supplier quote. Where the company has saved its own price (priceSource "company") that price wins over the reference one; say which you used. A unit cost of 0 with priceSource "reference" means no reference price is on file yet: say so instead of quoting it. Outside the tools, give typical ranges only when you can find a recent public source, cite it with its date, and tell the user to get a current quote from their supplier (Westburne, Nedco, Guillevin, EECOL, Wesco and others price per account).
 - Labour: call labour_rates for the burdened cost per paid hour and the suggested charge-out rate for a trade in the user's province (open shop or union). State the assumptions the tool returns (utilization, overhead, profit).
-- Sizes, ratings and quantities (conductor and breaker sizes, voltage drop, conduit fill, concrete volumes and similar): call run_calculator and quote its answer, warnings and references. Do not size equipment from memory. If no calculator covers it, say so, work it out as a typical value and tell the user to confirm against the code book. run_calculator also returns a priced takeoff for users who can see costs; use it when asked to price a job.
-- Tax: for GST/HST/PST/QST, use the salesTax rules the tools return. Do not recall rates from memory, and remember that where the contractor pays PST on installed materials (BC, SK, MB) the client is charged GST only and the PST belongs in the material cost.
+- Sizes, ratings and quantities (conductor and breaker sizes, voltage drop, conduit fill, concrete volumes and similar): call run_calculator and quote its answer, warnings and references. Do not size equipment from memory. If no calculator covers it, say so and tell the user to confirm against the code book; for ordinary estimating only (typical productivity, crew size, contingency), you may give a typical value and label it as one. Never estimate, guess or give a "typical value" for arc-flash incident energy or PPE category, hazardous-location classification, grounding and bonding conductor sizing, fault current, or anything life-safety: for those, refer the user to the engineer of record, the current code book and the authority having jurisdiction. run_calculator also returns a priced takeoff for users who can see costs; use it when asked to price a job.
+- Tax: for GST/HST/PST/QST, use the salesTax rules the tools return. Take tax from the tool result, never from memory: rules differ by province and trade (for example Saskatchewan and Manitoba electrical, plumbing and HVAC differ from BC and Manitoba general trades). Pass the job's trade to the tool when it is not electrical, and quote the note the tool returns.
 - To draft estimate lines: call lookup_costs for the items and run_calculator for quantities, then list each line with quantity, unit, unit cost, labour hours and where the price came from.
 - For questions about their jobs, estimates, crews or records, call search_company_records instead of assuming. Only report what the records show.
 - Be direct and practical, like an experienced super talking to their crew. Use metric and imperial where the trade does. Keep answers as short as the question allows; use short lists or tables when they help.`;
@@ -163,7 +164,7 @@ export const costingRank = () => getModule('estimates')?.read ?? 3;
 
 const LookupCostsInput = z.object({
   query: z.string().trim().min(1).max(100),
-  trade: z.enum(TRADES as [string, ...string[]]).optional(),
+  trade: z.enum(TRADES as [Trade, ...Trade[]]).optional(),
   limit: z.number().int().min(1).max(15).optional(),
 });
 
@@ -193,7 +194,7 @@ export function assistantTools(role: Role): Anthropic.Beta.BetaTool[] {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Words that must all appear in the item code or description' },
-            trade: { type: 'string', enum: [...TRADES], description: 'Only items of this trade' },
+            trade: { type: 'string', enum: [...TRADES], description: 'Only items of this trade. Also sets the trade used for the sales tax rules (default electrical)' },
             limit: { type: 'integer', minimum: 1, maximum: 15, description: 'How many items to return (default 8)' },
           },
           required: ['query'],
@@ -233,6 +234,7 @@ export function assistantTools(role: Role): Anthropic.Beta.BetaTool[] {
         type: 'object',
         properties: {
           id: { type: 'string', enum: CALCULATORS.map((c) => c.id), description: 'Which calculator' },
+          trade: { type: 'string', enum: [...TRADES], description: 'Trade of the job, used for sales tax rules (default electrical)' },
           input: { type: 'object', description: "The calculator's fields by key, as listed in the description", additionalProperties: true },
         },
         required: ['id'],
@@ -286,7 +288,7 @@ async function runLookupCosts(tc: AssistantToolContext, rawInput: unknown): Prom
   const companyPrices = await loadCompanyPrices(tc.supabase, tc.companyId);
 
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const hits = searchCatalog(query, { trade: trade as never, limit });
+  const hits = searchCatalog(query, { trade, limit });
   const items: Record<string, unknown>[] = [];
   for (const item of hits) {
     const priced = priceItem(item.code, { region: region.code, companyPrices });
@@ -332,7 +334,7 @@ async function runLookupCosts(tc: AssistantToolContext, rawInput: unknown): Prom
     region: region.name,
     currency: 'CAD, before tax',
     referencePricesAsOf: COSTBOOK_AS_OF,
-    salesTax: salesTax(tc.province),
+    salesTax: salesTax(tc.province, { trade: trade ?? 'electrical' }),
     catalogSize: CATALOG.length,
     companyPricesFound: companyPrices.length,
     returned: items.length,
@@ -360,6 +362,8 @@ async function runCalculatorTool(tc: AssistantToolContext, rawInput: unknown): P
   const id = rawInput && typeof rawInput === 'object' ? (rawInput as { id?: unknown }).id : undefined;
   const calc = typeof id === 'string' ? getCalculator(id) : undefined;
   if (!calc) return bad(`Unknown calculator. Available: ${CALCULATORS.map((c) => c.id).join(', ')}`);
+  const tradeParsed = z.enum(TRADES as [Trade, ...Trade[]]).optional().safeParse((rawInput as { trade?: unknown }).trade);
+  if (!tradeParsed.success) return bad(`Unknown trade. Available: ${TRADES.join(', ')}`);
   const checked = validateCalcInput(calc, (rawInput as { input?: unknown }).input);
   if (!checked.ok) return bad(`Invalid input for ${calc.id}: ${checked.error}`);
 
@@ -381,7 +385,7 @@ async function runCalculatorTool(tc: AssistantToolContext, rawInput: unknown): P
     const region = getRegion(tc.province);
     const companyPrices: CompanyPrice[] = await loadCompanyPrices(tc.supabase, tc.companyId);
     out.takeoff = priceTakeoff(result.takeoff, { region: region.code, companyPrices });
-    out.salesTax = salesTax(tc.province);
+    out.salesTax = salesTax(tc.province, { trade: tradeParsed.data ?? 'electrical' });
     out.pricingNote = `Priced for ${region.name}; reference prices are baselines dated ${COSTBOOK_AS_OF} and company prices win. Tax is not included.`;
   }
   return ok(out);

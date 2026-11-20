@@ -66,6 +66,18 @@ describe('voltage-drop', () => {
     expect(r.warnings.some((w) => w.includes('8-102'))).toBe(true);
   });
 
+  it('keeps the summary Pass/Fail in step with values.passes, including the 5% total', () => {
+    const verdict = (r: ReturnType<typeof run>) => r.summary.find((l) => l.value === 'Pass' || l.value === 'Fail')!.value;
+    // 8 AWG passes on its own (1.91%), but 4% already used upstream makes the total 5.91%: over 5%
+    const total = run('voltage-drop', { size: '8', upstream: 4 });
+    expect(total.values.passes).toBe(false);
+    expect(verdict(total)).toBe('Fail');
+    const ok = run('voltage-drop', { size: '8' });
+    expect(ok.values.passes).toBe(true);
+    expect(verdict(ok)).toBe('Pass');
+    expect(verdict(run('voltage-drop'))).toBe('Fail');
+  });
+
   // 10 AWG (1.24): 2 x 15 x 98.425 x 0.00124 = 3.661 V = 3.05%, still over; 8 AWG (0.778): 2.297 V = 1.91%, passes
   it('finds the smallest size within 3%', () => {
     expect(run('voltage-drop').values.smallest_size).toBe('8');
@@ -125,7 +137,7 @@ describe('voltage-drop', () => {
 describe('conductor-size', () => {
   // 40 A continuous = 50 A. 8 AWG copper 90 C column 55 A, but a 75 C termination holds it to 50 A: exactly enough
   it('applies the 125% continuous factor and the termination limit', () => {
-    const r = run('conductor-size');
+    const r = run('conductor-size', { termination: '75' });
     expect(r.values.design_current_a).toBe(50);
     expect(r.values.size).toBe('8');
     expect(r.values.usable_ampacity_a).toBe(50);
@@ -135,6 +147,32 @@ describe('conductor-size', () => {
   // 60 C termination: 6 AWG column is 55 A, so 50 A needs 8 AWG at 60 C? 8 AWG 60 C = 40 A, 6 AWG = 55 A
   it('uses the 60 C column when the equipment is only rated 60 C', () => {
     expect(run('conductor-size', { termination: '60' }).values.size).toBe('6');
+  });
+
+  it('defaults the termination to 60 C unless 75 C equipment is selected', () => {
+    const d = run('conductor-size');
+    expect(d.values.size).toBe('6');
+    expect(d.values.size).toBe(run('conductor-size', { termination: '60' }).values.size);
+    expect(run('conductor-size', { termination: '75' }).values.size).toBe('8');
+  });
+
+  // 40 A continuous in free air, 80%-rated equipment: 40 / 0.70 = 57.14 A. 6 AWG free air at 75 C is 105 A, so size by
+  // the factor not 125% (50 A): the design current must be 57.14 A, and a 100%-rated device uses 40 / 0.85 = 47.06 A
+  it('applies 70% / 85% continuous factors in free air and 80% / 100% in a raceway', () => {
+    const air80 = run('conductor-size', { load: 40, method: 'air' });
+    expect(air80.values.continuous_factor).toBe(0.7);
+    expect(air80.values.design_current_a).toBeCloseTo(57.14, 2);
+    const air100 = run('conductor-size', { load: 40, method: 'air', rating: '100' });
+    expect(air100.values.continuous_factor).toBe(0.85);
+    expect(air100.values.design_current_a).toBeCloseTo(47.06, 2);
+    const rw80 = run('conductor-size', { load: 40 });
+    expect(rw80.values.continuous_factor).toBe(0.8);
+    expect(rw80.values.design_current_a).toBe(50);
+    const rw100 = run('conductor-size', { load: 40, rating: '100' });
+    expect(rw100.values.continuous_factor).toBe(1);
+    expect(rw100.values.design_current_a).toBe(40);
+    expect(run('conductor-size', { load: 40, continuous: false, method: 'air' }).values.design_current_a).toBe(40);
+    expect(air80.summary.some((l) => l.value.includes('70%'))).toBe(true);
   });
 
   // 85 A, 75 C insulation, 45 C ambient (factor sqrt(30/45) = 0.82), 7 conductors (0.70):
@@ -148,12 +186,12 @@ describe('conductor-size', () => {
   });
 
   it('uses Table 4 for aluminum: 100 A needs 1 AWG (100 A at 75 C)', () => {
-    expect(run('conductor-size', { load: 100, continuous: false, material: 'al' }).values.size).toBe('1');
+    expect(run('conductor-size', { load: 100, continuous: false, material: 'al', termination: '75' }).values.size).toBe('1');
   });
 
   // Free air 14 AWG copper: 90 C 35 A but 75 C termination 30 A; 28 A fits
   it('uses the free-air tables', () => {
-    const r = run('conductor-size', { load: 28, continuous: false, method: 'air' });
+    const r = run('conductor-size', { load: 28, continuous: false, method: 'air', termination: '75' });
     expect(r.values.size).toBe('14');
     expect(r.values.usable_ampacity_a).toBe(30);
   });
@@ -264,11 +302,16 @@ describe('box-fill', () => {
     expect(Number(run('box-fill', { n14: 2, bonding: false, devices: 0, deepDevices: 1, deepDepth: 4 }).values.required_ml)).toBeCloseTo(49.2 + 128, 1);
   });
 
+  it('labels the NEC-style allowances as a conservative estimate to confirm against Rule 12-3034', () => {
+    const r = run('box-fill');
+    expect(r.warnings.some((w) => w.includes('conservative estimate') && w.includes('Rule 12-3034'))).toBe(true);
+  });
+
   it('accepts a marked volume and a quantity', () => {
     const r = run('box-fill', { customMl: 500, qty: 12 });
     expect(r.values.box_ml).toBe(500);
     expect(r.takeoff[0]).toMatchObject({ quantity: 12 });
-    expect(run('box-fill', { n14: 40, n12: 40, n10: 40, n8: 40, n6: 40, devices: 12 }).warnings.some((w) => w.includes('Rule 12-3036'))).toBe(true);
+    expect(run('box-fill', { n14: 40, n12: 40, n10: 40, n8: 40, n6: 40, devices: 12 }).warnings.some((w) => w.includes('larger junction box'))).toBe(true);
   });
 });
 
@@ -279,9 +322,11 @@ describe('motor-circuit', () => {
     expect(r.values.fla_a).toBe(32);
     expect(r.values.min_conductor_ampacity_a).toBe(40);
     expect(r.values.conductor_size).toBe('8');
-    // inverse-time breaker 250% x 32 = 80 A; overload 125% x 32 = 40 A; NEMA size 3 (30 hp at 575 V)
+    // inverse-time breaker 250% x 32 = 80 A; NEMA size 3 (30 hp at 575 V). The overload is set from the nameplate, so none without one
     expect(r.values.max_device_a).toBe(80);
-    expect(r.values.overload_a).toBe(40);
+    expect(r.values.overload_a).toBeUndefined();
+    // with a 32 A nameplate and a service factor of 1.15 or more: 125% x 32 = 40 A
+    expect(run('motor-circuit', { hp: '30', supply: '3ph-600', nameplate: 32 }).values.overload_a).toBe(40);
     expect(r.values.starter_size).toBe('3');
     expect(r.takeoff.some((t) => t.code === 'STARTER-NEMA1')).toBe(false);
   });
@@ -310,6 +355,20 @@ describe('motor-circuit', () => {
     expect(r.values.fla_a).toBe(12);
     expect(r.values.conductor_size).toBe('14');
     expect(r.takeoff.some((t) => t.code === 'DISC-60A')).toBe(true);
+  });
+
+  it('shows no overload figure without a nameplate and warns', () => {
+    const r = run('motor-circuit', { hp: '5', supply: '3ph-600' });
+    expect(r.values.overload_a).toBeUndefined();
+    expect(r.summary.find((l) => l.label === 'Overload setting')!.value).toContain('nameplate');
+    expect(r.warnings.some((w) => w.includes('No nameplate current entered'))).toBe(true);
+    expect(r.values.fla_a).toBe(r.values.table_fla_a); // conductor still sized from the table current
+    expect(r.values.min_conductor_ampacity_a).toBeCloseTo(Number(r.values.table_fla_a) * 1.25, 2);
+  });
+
+  it('sets the overload at 125% of nameplate with a service factor of 1.15 or more', () => {
+    const r = run('motor-circuit', { nameplate: 10, sf: true });
+    expect(r.values.overload_a).toBeCloseTo(12.5, 2);
   });
 
   it('uses the nameplate for the overload, 115% without the service factor', () => {
@@ -353,6 +412,20 @@ describe('dwelling-load', () => {
     expect(r.values.calculated_a).toBeCloseTo(149.8, 1);
     expect(r.values.service_a).toBe(150);
     expect(r.takeoff.map((t) => t.code)).toEqual(['PANEL-200A', 'METER-200A']);
+  });
+
+  // Same dwelling with a 7 kW hot tub at 100%: +7,000 W -> 42,950 W = 178.96 A, which moves the 150 A service up to 200 A
+  it('counts a hot tub, spa or pool heater at 100% in its own field', () => {
+    const base = { ground: 150, upper: 0, basement: 100, heat: 15, ac: 0, range: 12, waterHeater: 3, dryer: 5, evse: 7.2, other: 0 };
+    const a = run('dwelling-load', base);
+    const b = run('dwelling-load', { ...base, spa: 7 });
+    expect(Number(b.values.calculated_w) - Number(a.values.calculated_w)).toBe(7000);
+    expect(b.values.calculated_w).toBe(42950);
+    expect(a.values.service_a).toBe(150);
+    expect(b.values.service_a).toBe(200);
+    // the old "other loads" route only counted 25% of it
+    const viaOther = run('dwelling-load', { ...base, other: 7 });
+    expect(Number(viaOther.values.calculated_w) - Number(a.values.calculated_w)).toBe(1750);
   });
 
   it('applies the 100 A minimum for 80 m2 or more and 60 A below', () => {

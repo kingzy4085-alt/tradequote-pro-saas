@@ -1,4 +1,4 @@
-import { awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtMost, values } from '../common';
+import { AHJ_CHECK_LINE, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtMost, values } from '../common';
 import { MOTOR_1PH, MOTOR_1PH_HP, MOTOR_3PH, MOTOR_3PH_HP, STD_OCPD, T2_CU, sizesFor } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -11,8 +11,8 @@ const TECK_SIZES = new Set(['12', '10', '8', '6', '4', '2']);
 const fields: CalcField[] = [
   selField('hp', 'Motor rating', '5', HP_LABEL.map(([v, l]) => [v, `${l} hp`] as [string, string])),
   selField('supply', 'Supply', '3ph-600', [['1ph-120', 'Single-phase 120 V'], ['1ph-240', 'Single-phase 240 V'], ['3ph-208', 'Three-phase 208 V'], ['3ph-240', 'Three-phase 240 V'], ['3ph-480', 'Three-phase 480 V'], ['3ph-600', 'Three-phase 600 V']]),
-  numField('nameplate', 'Nameplate full-load current (optional)', 'A', 0, 0, 1000, 0.1, 'Leave at 0 to use the table value. The overload uses the nameplate when given.'),
-  boolField('sf', 'Service factor 1.15 or more, or temperature rise 40 °C or less', true, 'Sets the overload at 125% of nameplate current; otherwise 115% (Rule 28-306).'),
+  numField('nameplate', 'Nameplate full-load current (optional)', 'A', 0, 0, 1000, 0.1, 'Leave at 0 to size the conductor from the table value. Overload protection must be set from the nameplate, so no overload figure is shown without it.'),
+  boolField('sf', 'Service factor 1.15 or more, or temperature rise 40 °C or less', true, 'Sets the overload at up to 125% of the nameplate current; otherwise up to 115% (Rule 28-306). Applies only when the nameplate current is entered.'),
   selField('device', 'Branch-circuit protection', 'breaker', [['breaker', 'Inverse-time breaker (250%)'], ['delay', 'Time-delay fuse (175%)'], ['fuse', 'Non-time-delay fuse (300%)']]),
   numField('length', 'Run length to the motor', 'm', 20, 0, 1000, 0.5, 'Used for the Teck90 cable takeoff.'),
 ];
@@ -40,7 +40,8 @@ export const motorCircuit: Calculator = {
     const tableFla = three ? MOTOR_3PH[col as '208'][idx] : MOTOR_1PH[col as '115'][idx];
     const plate = p.n('nameplate');
     const fla = plate > 0 ? plate : tableFla;
-    if (plate > 0) warnings.push(`Nameplate ${plate} A is used for the conductor and overload; the table value is ${tableFla} A. Overcurrent maximums use the table current.`);
+    if (plate > 0) warnings.push(`Nameplate ${plate} A is used for the conductor and the overload; the table value is ${tableFla} A. Overcurrent maximums use the table current.`);
+    else warnings.push('No nameplate current entered, so no overload setting is shown. Overload protection is set from the motor nameplate current, not the table value. Enter the nameplate current to see it.');
     const minAmp = fla * 1.25;
     const size = sizesFor('cu').find((s) => T2_CU[s][1] >= minAmp - 1e-9);
     if (!size) warnings.push('The motor current is above what a single 500 kcmil copper conductor carries at 75 °C; use parallel conductors.');
@@ -48,7 +49,7 @@ export const motorCircuit: Calculator = {
     const maxDevice = (tableFla * pct) / 100;
     const std = stdAtMost(STD_OCPD, maxDevice);
     warnings.push(`If ${std ?? 'the'} A will not carry the starting current, Rule 28-200 allows a higher setting; check the Table 29 notes. Use the maximum that still starts the motor.`);
-    const overload = fla * (p.b('sf') ? 1.25 : 1.15);
+    const overload: number | null = plate > 0 ? plate * (p.b('sf') ? 1.25 : 1.15) : null;
     const nemaIdx = three
       ? NEMA_3PH.find((r) => (volts === 208 ? r[1] : volts === 240 ? r[2] : r[3]) >= hp - 1e-6)
       : null;
@@ -70,12 +71,12 @@ export const motorCircuit: Calculator = {
       summary: [
         { label: 'Full-load current', value: `${fmt(fla, 1)} A${plate > 0 ? ' (nameplate)' : ` (Table ${three ? 44 : 45})`}`, emphasis: true },
         { label: 'Minimum conductor', value: size ? `${awgLabel(size)} copper (75 °C, at least ${fmt(minAmp, 1)} A)` : 'parallel conductors' },
-        { label: 'Overload setting', value: `${fmt(overload, 1)} A (${p.b('sf') ? 125 : 115}% of ${fmt(fla, 1)} A)` },
+        { label: 'Overload setting', value: overload !== null ? `${fmt(overload, 1)} A (${p.b('sf') ? 125 : 115}% of ${fmt(plate, 1)} A nameplate)` : 'Enter the nameplate current' },
         { label: 'Maximum breaker or fuse', value: `${fmt(maxDevice, 0)} A calculated; ${std ?? 'below 15'} A standard` },
         { label: 'NEMA starter size', value: starterSize ? `Size ${starterSize}` : 'special' },
         { label: 'Disconnect', value: `at least ${fmt(discA, 0)} A (115% of full-load current)` },
       ],
-      values: values({ hp, fla_a: round(fla, 2), table_fla_a: tableFla, min_conductor_ampacity_a: round(minAmp, 2), conductor_size: size ?? null, overload_a: round(overload, 2), max_device_pct: pct, max_device_a: round(maxDevice, 1), std_device_a: std, starter_size: starterSize ?? null, disconnect_a: round(discA, 1) }),
+      values: values({ hp, fla_a: round(fla, 2), table_fla_a: tableFla, min_conductor_ampacity_a: round(minAmp, 2), conductor_size: size ?? null, overload_a: overload !== null ? round(overload, 2) : null, max_device_pct: pct, max_device_a: round(maxDevice, 1), std_device_a: std, starter_size: starterSize ?? null, disconnect_a: round(discA, 1) }),
       takeoff,
       warnings,
       references: [
@@ -83,6 +84,7 @@ export const motorCircuit: Calculator = {
         'CEC Rule 28-106 (conductors at 125% of full-load current) and Rule 28-104 (75 °C basis), Table 2',
         'CEC Rule 28-306 (overload), Rule 28-200 and Table 29 (branch-circuit protection)',
         'NEMA ICS 2 starter horsepower ratings for size selection; disconnect at 115% of full-load current (CEC Section 28 disconnecting means)',
+        AHJ_CHECK_LINE,
       ],
     };
   },

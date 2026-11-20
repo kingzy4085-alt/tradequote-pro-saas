@@ -1,4 +1,4 @@
-import { compact, core, fmt, numField, readFields, round, selField, values } from '../common';
+import { AHJ_CHECK_LINE, compact, core, fmt, numField, readFields, round, selField, values } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 /** Typical maintained illuminance targets, lux, at the work plane. IES-based recommendations; confirm with the project specification. */
@@ -87,6 +87,7 @@ export const lightingLayout: Calculator = {
         'Lumen method: N = (E x A) / (lumens x CU x LLF)',
         'Target illuminance: IES Lighting Handbook recommended maintained illuminance by task (typical values; the NBC and NECB do not set lux)',
         'Compare the connected load with the NECB 2020 Part 4 lighting power allowance for the building type',
+        AHJ_CHECK_LINE,
       ],
     };
   },

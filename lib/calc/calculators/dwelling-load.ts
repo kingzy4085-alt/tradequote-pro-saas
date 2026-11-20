@@ -1,4 +1,4 @@
-import { compact, core, fmt, free, numField, readFields, round, boolField, values, ceil } from '../common';
+import { AHJ_CHECK_LINE, compact, core, fmt, free, numField, readFields, round, boolField, values, ceil } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 const fields: CalcField[] = [
@@ -14,7 +14,8 @@ const fields: CalcField[] = [
   boolField('tankless', 'Water heater is tankless', false, 'Tankless heaters count at 100%.'),
   numField('dryer', 'Clothes dryer', 'kW', 5, 0, 15, 0.1),
   numField('evse', 'EV charger', 'kW', 0, 0, 20, 0.1, 'Counted at 100% unless an energy management system limits it (Rule 8-106 11).'),
-  numField('other', 'Other fixed loads over 1.5 kW each (total)', 'kW', 0, 0, 60, 0.1, 'Hot tubs, pool heaters, welders and similar; a hot tub or pool heater counts at 100%.'),
+  numField('other', 'Other fixed loads over 1.5 kW each (total)', 'kW', 0, 0, 60, 0.1, 'Welders, pumps and similar fixed loads, counted with the dryer and water heater. Do not enter hot tubs, spas or pool heating here; use the field below.'),
+  numField('spa', 'Hot tub, spa and pool heating loads (total)', 'kW', 0, 0, 60, 0.1, 'Counted at 100% of the rating, added to the calculated load.'),
 ];
 const SERVICES = [60, 100, 125, 150, 200, 300, 400, 600];
 
@@ -39,10 +40,11 @@ export const dwellingLoad: Calculator = {
     const rangeW = rangeKw > 0 ? 6000 + 0.4 * Math.max(0, rangeKw - 12) * 1000 : 0;
     const tankW = p.b('tankless') ? p.n('waterHeater') * 1000 : 0;
     const evW = p.n('evse') * 1000;
+    const spaW = p.n('spa') * 1000;
     const otherLoads = [p.b('tankless') ? 0 : p.n('waterHeater') * 1000, p.n('dryer') * 1000, p.n('other') * 1000].filter((w) => w > 1500);
     const otherSum = otherLoads.reduce((a, b) => a + b, 0);
     const otherDemand = rangeKw > 0 ? 0.25 * otherSum : Math.min(otherSum, 6000) + 0.25 * Math.max(0, otherSum - 6000);
-    const itemA = basic + climate + rangeW + tankW + evW + otherDemand;
+    const itemA = basic + climate + rangeW + tankW + evW + spaW + otherDemand;
     const floorExcl = p.n('ground') + p.n('upper');
     const itemB = floorExcl >= 80 ? 24000 : 14400;
     const calcW = Math.max(itemA, itemB);
@@ -68,16 +70,18 @@ export const dwellingLoad: Calculator = {
         { label: 'Basic load', value: `${fmt(basic, 0)} W` },
         { label: 'Heating and cooling', value: `${fmt(climate, 0)} W` },
         { label: 'Range, water heater, EV', value: `${fmt(rangeW + tankW + evW, 0)} W` },
+        { label: 'Hot tub, spa and pool heating (100%)', value: `${fmt(spaW, 0)} W` },
         { label: 'Other loads over 1.5 kW', value: `${fmt(otherDemand, 0)} W demand from ${fmt(otherSum, 0)} W connected` },
         { label: 'Minimum under 8-200 1) b)', value: `${itemB} W` },
       ],
-      values: values({ living_area_m2: round(living, 2), basic_load_w: basic, heating_cooling_w: round(climate, 0), range_w: rangeW, tankless_w: tankW, evse_w: evW, other_demand_w: round(otherDemand, 0), item_a_w: round(itemA, 0), item_b_w: itemB, calculated_w: round(calcW, 0), calculated_a: round(amps, 1), service_a: service ?? null }),
+      values: values({ living_area_m2: round(living, 2), basic_load_w: basic, heating_cooling_w: round(climate, 0), range_w: rangeW, tankless_w: tankW, evse_w: evW, spa_w: spaW, other_demand_w: round(otherDemand, 0), item_a_w: round(itemA, 0), item_b_w: itemB, calculated_w: round(calcW, 0), calculated_a: round(amps, 1), service_a: service ?? null }),
       takeoff,
       warnings,
       references: [
         'CEC 2024 Rule 8-200 1) (single dwelling: basic load, heating, air conditioning, range, tankless water heater, EVSE, other loads over 1500 W) and the 8-200 1) b) minimum',
         'CEC Rule 8-110 (living area from inside dimensions, basement at 75%), Rule 8-106 3) (interlocked loads), Section 62 heating demand',
         'Amperes = calculated watts / 240 V; service sizes rounded up to the next common size',
+        AHJ_CHECK_LINE,
       ],
     };
   },

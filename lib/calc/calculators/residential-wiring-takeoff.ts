@@ -1,4 +1,4 @@
-import { ceil, compact, core, fmt, numField, readFields, round, selField, boolField, values } from '../common';
+import { AHJ_CHECK_LINE, ceil, compact, core, fmt, numField, readFields, round, selField, boolField, values } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 const fields: CalcField[] = [
@@ -15,7 +15,7 @@ const fields: CalcField[] = [
   boolField('basement', 'Finished basement', false, 'Adds a smoke alarm on that level.'),
   boolField('fuel', 'Fuel-fired appliance or attached garage', true, 'Requires a carbon monoxide alarm.'),
   boolField('ev', 'EV charger circuit', false),
-  selField('afci', 'AFCI protection', 'bedrooms', [['bedrooms', 'Bedroom circuits'], ['living', 'Bedrooms and living areas'], ['all', 'All 15 A and 20 A circuits except kitchen counters and wet areas']], 'Confirm the scope in the edition your province has adopted.'),
+  selField('afci', 'AFCI protection', 'living', [['bedrooms', 'Bedroom circuits only (older editions)'], ['living', 'All general receptacle circuits (bedrooms and living areas)'], ['all', 'General receptacle circuits plus lighting and other 15 A and 20 A circuits']], 'Current editions require AFCI protection on most 125 V, 15 A and 20 A receptacle branch circuits in dwelling units. Provincial amendments vary; confirm the scope with the authority having jurisdiction.'),
 ];
 
 export const residentialWiringTakeoff: Calculator = {
@@ -31,7 +31,7 @@ export const residentialWiringTakeoff: Calculator = {
     const p = readFields(input, fields, warnings);
     const area = p.n('area'), storeys = Math.round(p.n('storeys')), beds = Math.round(p.n('bedrooms')), baths = Math.round(p.n('bathrooms')), rooms = Math.round(p.n('rooms'));
     const general = beds + rooms;
-    // General-room receptacles: the 1.8 m rule (CEC 26-712) means one receptacle per 3.6 m of usable wall, minimum two per room.
+    // General-room receptacles: the 1.8 m rule (CEC Rule 26-712) means one receptacle per 3.6 m of usable wall, minimum two per room.
     const roomArea = general > 0 ? Math.max(area - 14 - 5 * baths, 0) * 0.88 / general : 0;
     const usableWall = Math.max(4 * Math.sqrt(roomArea) - 2, 3);
     const perRoom = general > 0 ? Math.max(2, ceil(usableWall / 3.6)) : 0;
@@ -108,9 +108,10 @@ export const residentialWiringTakeoff: Calculator = {
       takeoff,
       warnings,
       references: [
-        'CEC 2024 Rule 26-712 (receptacle spacing in dwellings: no point along the floor line more than 1.8 m from a receptacle; counter spacing), Rule 26-700 (GFCI) and Rule 26-724 (AFCI)',
+        'CEC 2024 Rule 26-712 (receptacle spacing in dwellings: no point along the floor line more than 1.8 m from a receptacle; counter spacing), Rule 26-700 (GFCI). AFCI scope varies by edition and province: confirm with the authority having jurisdiction',
         'CEC Rule 8-304 (up to 12 outlets on a 15 A circuit); NBC 9.10.19 smoke alarms and 9.33.4 carbon monoxide alarms',
         'Cable: 4.5 m per outlet plus a home run of 6 m, 4 m per extra storey and 0.3 x the square root of the area; 10% added for waste',
+        AHJ_CHECK_LINE,
       ],
     };
   },

@@ -1,4 +1,4 @@
-import { M_PER_FT, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtLeast, values } from '../common';
+import { AHJ_CHECK_LINE, M_PER_FT, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtLeast, values } from '../common';
 import { R_AL, R_CU, STD_OCPD, T2_CU, T4_AL, sizesFor, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -53,7 +53,7 @@ export const evChargerCircuit: Calculator = {
     const takeoff = compact([
       core('EVSE-L2-48A', 1, { note: amps > 48 ? 'catalog unit is 48 A; confirm the model' : amps < 48 ? `set to ${amps} A on the unit` : undefined }),
       breaker ? coreOrFree(code, `Breaker ${breaker} A 2-pole`, 1, 'ea') : null,
-      hs ? coreOrFree(wireCode(material, hs), `RW90 ${material === 'cu' ? 'copper' : 'aluminum'} ${awgLabel(hs)}`, round(p.n('distance') * 3, 1), 'm', { note: '2 hot conductors and 1 bonding conductor; the bond may be one size smaller (Rule 10-616)' }) : null,
+      hs ? coreOrFree(wireCode(material, hs), `RW90 ${material === 'cu' ? 'copper' : 'aluminum'} ${awgLabel(hs)}`, round(p.n('distance') * 3, 1), 'm', { note: '2 hot conductors and 1 bonding conductor; size the bonding conductor from the CEC bonding table for the overcurrent device rating' }) : null,
     ]);
     return {
       summary: [
@@ -69,6 +69,7 @@ export const evChargerCircuit: Calculator = {
       references: [
         'CEC 2024 Section 86 (electric vehicle charging; branch circuit at 125% of the continuous current), Rule 8-104',
         'CEC Table 2 and Table 4 ampacity at 75 °C; Rule 8-102 voltage drop; Rule 8-200 1) a) vi) and Rule 8-106 11) (EVEMS)',
+        AHJ_CHECK_LINE,
       ],
     };
   },

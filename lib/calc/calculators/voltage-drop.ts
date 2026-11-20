@@ -1,4 +1,4 @@
-import { M_PER_FT, compact, coreOrFree, fmt, numField, readFields, round, selField, values, awgLabel } from '../common';
+import { AHJ_CHECK_LINE, M_PER_FT, compact, coreOrFree, fmt, numField, readFields, round, selField, values, awgLabel } from '../common';
 import { R_AL, R_CU, SIZES, T2_CU, T4_AL, XL, sizesFor, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -73,27 +73,29 @@ export const voltageDrop: Calculator = {
     if (total > 5) warnings.push(`Total drop of ${fmt(total, 2)}% from the service is over the 5% limit (Rule 8-102).`);
     if (!best) warnings.push(`No size up to 500 kcmil keeps the drop within ${fmt(allowed, 1)}%. Use parallel conductors or a higher voltage.`);
     if (lengthFt <= 0) warnings.push('Enter a length to see the drop.');
-    if (sys.phases === 0) warnings.push('DC drop uses resistance only. For extra-low-voltage circuits CEC Rule 8-102 and Table D3 note limits conductor loading to keep the conductor cool.');
+    if (sys.phases === 0) warnings.push('DC drop uses resistance only. Check the conductor ampacity separately, and confirm any extra-low-voltage limits with the authority having jurisdiction.');
 
     const takeoff = compact([
       lengthM > 0 ? coreOrFree(wireCode(material, size), `RW90 ${material === 'cu' ? 'copper' : 'aluminum'} ${awgLabel(size)}`, round(lengthM * sys.conductors, 1), 'm', { note: `${sys.conductors} conductors x ${round(lengthM, 1)} m, no ground wire counted` }) : null,
     ]);
+    const passes = pct <= limit && total <= 5;
     const smallestOk = best ? awgLabel(best) : 'none up to 500 kcmil';
     return {
       summary: [
         { label: 'Voltage drop', value: `${fmt(vd, 2)} V (${fmt(pct, 2)}%)`, emphasis: true },
-        { label: pct <= limit ? 'Within 3% limit' : 'Over the 3% limit', value: pct <= limit ? 'Pass' : 'Fail' },
+        { label: passes ? 'Within the voltage drop limits' : pct > limit ? 'Over the 3% limit' : 'Over the 5% total limit', value: passes ? 'Pass' : 'Fail' },
         { label: 'Smallest size within the limit', value: smallestOk },
         { label: 'Total with upstream drop', value: `${fmt(total, 2)}% (limit 5%)` },
         { label: 'Voltage at the load', value: `${fmt(volts - vd, 1)} V of ${fmt(volts, 0)} V` },
       ],
-      values: values({ voltage_drop_v: round(vd, 3), voltage_drop_pct: round(pct, 3), limit_pct: limit, total_pct: round(total, 3), passes: pct <= limit && total <= 5, smallest_size: best ?? null, size: size, material, length_m: round(lengthM, 2), load_a: load }),
+      values: values({ voltage_drop_v: round(vd, 3), voltage_drop_pct: round(pct, 3), limit_pct: limit, total_pct: round(total, 3), passes, smallest_size: best ?? null, size: size, material, length_m: round(lengthM, 2), load_a: load }),
       takeoff,
       warnings,
       references: [
         'CEC 2024 Rule 8-102 (voltage drop limits: 3% in a feeder or branch circuit, 5% total)',
         'Conductor resistance at 75 °C: NEC Chapter 9 Table 8 values (basis of CEC Appendix D Table D3); reactance: NEC Chapter 9 Table 9',
         'Method: drop = 2 x I x L x Z (single-phase, DC) or 1.732 x I x L x Z (three-phase), with Z = R cos(phi) + X sin(phi)',
+        AHJ_CHECK_LINE,
       ],
     };
   },

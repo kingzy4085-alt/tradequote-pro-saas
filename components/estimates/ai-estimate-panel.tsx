@@ -220,6 +220,9 @@ export default function AiEstimatePanel({
 
       {result && (
         <div className="mt-6 space-y-5 border-t border-slate-800 pt-5">
+          <p role="note" className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+            Sizes and quantities here are AI assumptions. Check them before you send. The summary and scope text will appear on the client proposal once you add them, so review the wording first.
+          </p>
           <div>
             <h3 className="text-sm font-semibold text-amber-400 uppercase tracking-wider">Summary</h3>
             <p className="mt-1 text-slate-200">{result.draft.summary}</p>

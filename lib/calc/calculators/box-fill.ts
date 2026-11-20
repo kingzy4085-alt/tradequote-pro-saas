@@ -1,4 +1,4 @@
-import { compact, core, fmt, free, numField, readFields, round, selField, boolField, values } from '../common';
+import { AHJ_CHECK_LINE, compact, core, fmt, free, numField, readFields, round, selField, boolField, values } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 /** CEC Table 22: usable space per insulated conductor, mL (cm3). */
@@ -23,12 +23,12 @@ const fields: CalcField[] = [
   numField('n10', '10 AWG conductors', undefined, 0, 0, 40, 1),
   numField('n8', '8 AWG conductors', undefined, 0, 0, 40, 1),
   numField('n6', '6 AWG conductors', undefined, 0, 0, 40, 1),
-  boolField('bonding', 'Bonding (ground) conductors present', true, 'All bonding conductors together count as one conductor of the largest size.'),
-  numField('devices', 'Switches and receptacles (one strap each)', undefined, 1, 0, 12, 1, 'Each counts as two conductors of the largest size connected to it.'),
-  numField('studs', 'Fixture studs or hickeys', undefined, 0, 0, 6, 1, 'Each counts as one conductor of the largest size.'),
-  numField('connectors', 'Wire connectors (wire nuts)', undefined, 0, 0, 40, 1, 'Each pair counts as one conductor of the largest size.'),
-  numField('clamps', 'Internal cable clamps', undefined, 0, 0, 10, 1, 'No allowance under CEC 12-3034; use a box whose marked volume already allows for them.'),
-  numField('deepDevices', 'Devices deeper than 25.4 mm behind the strap', undefined, 0, 0, 12, 1, 'GFCI and smart devices: reduce usable space by 32 mL per cm of depth (Rule 12-3034 3).'),
+  boolField('bonding', 'Bonding (ground) conductors present', true, 'Conservative estimate: all bonding conductors together count as one conductor of the largest size. Confirm against Rule 12-3034.'),
+  numField('devices', 'Switches and receptacles (one strap each)', undefined, 1, 0, 12, 1, 'Conservative estimate: each counts as two conductors of the largest size. Confirm against Rule 12-3034.'),
+  numField('studs', 'Fixture studs or hickeys', undefined, 0, 0, 6, 1, 'Conservative estimate: each counts as one conductor of the largest size. Confirm against Rule 12-3034.'),
+  numField('connectors', 'Wire connectors (wire nuts)', undefined, 0, 0, 40, 1, 'Conservative estimate: each pair counts as one conductor of the largest size. Confirm against Rule 12-3034.'),
+  numField('clamps', 'Internal cable clamps', undefined, 0, 0, 10, 1, 'Not counted here. Use a box whose marked volume allows for them, and confirm with Rule 12-3034.'),
+  numField('deepDevices', 'Devices deeper than 25.4 mm behind the strap', undefined, 0, 0, 12, 1, 'GFCI and smart devices: conservative estimate: reduce usable space by 32 mL per cm of depth. Confirm against Rule 12-3034.'),
   numField('deepDepth', 'Depth of those devices behind the strap', 'cm', 4, 2.54, 10, 0.1),
   selField('box', 'Box to check', 'auto', [['auto', 'Find the smallest box that fits'], ...BOXES.map((b) => [b.id, b.label] as [string, string])]),
   numField('customMl', 'Marked box volume (overrides the list)', 'mL', 0, 0, 5000, 1, 'Enter the volume marked on the box, or leave at 0.'),
@@ -60,7 +60,7 @@ export const boxFill: Calculator = {
     const deep = Math.round(p.n('deepDevices')) * 32 * p.n('deepDepth');
     const required = conductorMl + bonding + devices + studs + connectors + deep;
     if (!present.length) warnings.push('No conductors entered; only fittings and devices were counted.');
-    if (p.n('clamps') > 0) warnings.push('CEC 12-3034 gives no volume allowance for internal clamps; make sure the box volume you use excludes the space they take (marked volumes already do).');
+    if (p.n('clamps') > 0) warnings.push('Internal clamps are not counted here; make sure the box volume you use allows for the space they take, and confirm against Rule 12-3034.');
     const custom = p.n('customMl');
     const chosen = p.s('box');
     const list = [...BOXES].sort((a, c) => a.ml - c.ml).filter((b) => b.ml >= required - 1e-9 && !(b.noDevices && Math.round(p.n('devices')) > 0));
@@ -68,9 +68,10 @@ export const boxFill: Calculator = {
     const sel = custom > 0 ? { id: 'custom', label: `Marked ${custom} mL box`, ml: custom, code: undefined as string | undefined } : chosen === 'auto' ? auto : BOXES.find((b) => b.id === chosen);
     if (sel && sel.id !== 'custom' && 'noDevices' in sel && (sel as { noDevices?: boolean }).noDevices && Math.round(p.n('devices')) > 0) warnings.push('Octagon boxes do not take switches or receptacles without a device ring; pick a device box or square box.');
     const pass = !!sel && sel.ml >= required - 1e-9;
-    if (!sel) warnings.push('No standard box in the list is large enough; use a larger junction box sized under Rule 12-3036.');
+    if (!sel) warnings.push('No standard box in the list is large enough; use a larger junction box and confirm its size with the authority having jurisdiction.');
     else if (!pass) warnings.push(`${sel.label} holds ${sel.ml} mL but ${fmt(required, 1)} mL is required.${auto ? ` Use at least: ${auto.label}.` : ''}`);
     if (big && required > 0 && Object.keys(T22_ML).length) warnings.push('Table 22 is used for mixed sizes and boxes; where all conductors are one size Table 23 gives the same answer in conductor counts.');
+    warnings.push('The allowances for devices, studs, connectors, bonding conductors and deep devices are a conservative estimate, not a confirmed Rule 12-3034 calculation. Confirm the box volume against Rule 12-3034 before you rely on it.');
     const qty = Math.round(p.n('qty'));
     const takeoff = sel && pass ? compact([sel.code ? core(sel.code, qty) : free(sel.label, qty, 'ea')]) : [];
     return {
@@ -86,7 +87,8 @@ export const boxFill: Calculator = {
       warnings,
       references: [
         'CEC 2024 Rule 12-3034 (maximum number of insulated conductors in a box), Table 22 (space per conductor) and Table 23 (box capacities)',
-        'Allowances: devices 2 x largest conductor, fixture studs 1, each pair of connectors 1, all bonding conductors together 1',
+        'Allowances (conservative estimate, confirm against Rule 12-3034): devices 2 x largest conductor, fixture studs 1, each pair of connectors 1, all bonding conductors together 1',
+        AHJ_CHECK_LINE,
       ],
     };
   },

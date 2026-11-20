@@ -115,6 +115,9 @@ export function stdAtMost(list: readonly number[], x: number): number | null {
   return best;
 }
 
+/** One plain reminder carried in the references of every calculator whose result reads like a pass or fail ruling. */
+export const AHJ_CHECK_LINE = 'Check against the CEC edition and amendments your province adopts; confirm with the authority having jurisdiction.';
+
 export const M_PER_FT = 0.3048;
 export const SQFT_PER_M2 = 10.7639;
 export const fmt = (x: number, dp = 1): string => round(x, dp).toLocaleString('en-CA', { maximumFractionDigits: dp });

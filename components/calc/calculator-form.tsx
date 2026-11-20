@@ -101,6 +101,9 @@ export function CalcResultView({ result, showTakeoff = true }: { result: CalcRes
         </div>
       )}
       {result.references.length > 0 && <p className="text-xs text-slate-500">Method: {result.references.join('; ')}</p>}
+      <p className="text-xs text-slate-400 leading-relaxed border-t border-slate-800 pt-3">
+        Estimating aid based on a summary of the CEC. Provinces adopt different editions and amendments. Confirm with the authority having jurisdiction, and the engineer of record where one is involved.
+      </p>
     </div>
   );
 }

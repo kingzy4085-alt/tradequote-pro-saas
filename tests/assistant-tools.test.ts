@@ -190,3 +190,27 @@ describe('run_calculator', () => {
     expect(getCalculator(calc.id)).toBeDefined();
   });
 });
+
+describe('compliance guardrails', () => {
+  it('refuses typical-value guesses for life-safety sizing and points to the AHJ', () => {
+    for (const phrase of ['arc-flash incident energy', 'hazardous-location classification', 'grounding and bonding conductor sizing', 'fault current', 'engineer of record', 'authority having jurisdiction']) {
+      expect(SYSTEM_PROMPT).toContain(phrase);
+    }
+    expect(SYSTEM_PROMPT).not.toMatch(/work it out as a typical value/);
+    expect(SYSTEM_PROMPT).not.toMatch(/client is charged GST only/);
+  });
+
+  it('takes tax by trade from the tool', async () => {
+    const sk = await run(ctxFor('owner', [], 'SK'), 'lookup_costs', { query: 'wire' });
+    expect(sk.json.salesTax).toEqual(salesTax('SK', { trade: 'electrical' }));
+    expect(sk.json.salesTax.total).toBe(11);
+    const mbE = await run(ctxFor('owner', [], 'MB'), 'lookup_costs', { query: 'wire' });
+    expect(mbE.json.salesTax.total).toBe(12);
+    const mbG = await run(ctxFor('owner', [], 'MB'), 'lookup_costs', { query: 'wire', trade: 'general' });
+    expect(mbG.json.salesTax.total).toBe(5);
+    const calc = await run(ctxFor('owner', [], 'MB'), 'run_calculator', { id: CALCULATORS[0].id, trade: 'general' });
+    expect(calc.json.salesTax.total).toBe(5);
+    const bad = await run(ctxFor('owner', [], 'MB'), 'run_calculator', { id: CALCULATORS[0].id, trade: 'nonsense' });
+    expect(bad.isError).toBe(true);
+  });
+});

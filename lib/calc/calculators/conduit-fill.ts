@@ -1,4 +1,4 @@
-import { awgLabel, ceil, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, values } from '../common';
+import { AHJ_CHECK_LINE, awgLabel, ceil, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, values } from '../common';
 import { CONDUIT_METRIC, CONDUIT_SIZES, EMT_AREA_MM2, EMT_CODE_SIZES, PVC_AREA_MM2, PVC_CODE_SIZES, SIZES, nylonAreaMm2, rw90AreaMm2, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -67,6 +67,7 @@ export const conduitFill: Calculator = {
         'CEC 2024 Rule 12-910 and Table 8: 53% for one conductor, 31% for two, 40% for three or more',
         'Conductor areas: CEC Table 6A (RW90 XLPE) and Table 6K (T90 Nylon); conduit areas: CEC Table 9 series / NEC Chapter 9 Table 4',
         'Couplings every 3 m (10 ft) and two connectors per run are estimating assumptions',
+        AHJ_CHECK_LINE,
       ],
     };
   },

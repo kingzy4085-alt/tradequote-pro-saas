@@ -1,4 +1,4 @@
-import { compact, core, fmt, free, numField, readFields, round, selField, stdAtLeast, values } from '../common';
+import { AHJ_CHECK_LINE, compact, core, fmt, free, numField, readFields, round, selField, stdAtLeast, values } from '../common';
 import { STD_OCPD } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -44,8 +44,8 @@ export const transformerSizing: Calculator = {
     const primaryStd = stdAtLeast(STD_OCPD, primaryMax);
     const secondaryMax = is * 1.25;
     const secondaryStd = stdAtLeast(STD_OCPD, secondaryMax);
-    warnings.push(`Primary-only protection: not above 125% of the primary current (${fmt(primaryMax, 1)} A), with the next standard size permitted where that does not match (Rule 26-254, Table 13).`);
-    warnings.push(`With secondary protection at up to 125% of the secondary current (${fmt(secondaryMax, 1)} A, Rule 26-256) the primary protection may be set higher. Read the rule for the exact limits and the 9 A and 2 A steps.`);
+    warnings.push(`Primary-only protection: not above 125% of the primary current (${fmt(primaryMax, 1)} A), with the next standard size permitted where that does not match (Rule 14-104 and Table 13). Confirm the transformer protection rule and edition with the authority having jurisdiction.`);
+    warnings.push(`With secondary protection at up to 125% of the secondary current (${fmt(secondaryMax, 1)} A) the primary protection may be set higher. Read the transformer protection rule in your adopted CEC edition for the exact limits.`);
     if (three && (kva === 15 || kva === 45)) {
       if (!(three && vp === 600 && vs === 208)) warnings.push('The catalog transformers are 600-120/208 V three-phase. Check the price for your voltages.');
     }
@@ -66,7 +66,8 @@ export const transformerSizing: Calculator = {
       warnings,
       references: [
         'kVA = V x I (single-phase) or 1.732 x V x I (three-phase) / 1000; standard distribution kVA ratings',
-        'CEC 2024 Rules 26-250 to 26-256 (transformer overcurrent protection), Rule 14-104 and Table 13 (standard ratings)',
+        'CEC transformer overcurrent protection rules (confirm the rule numbers in the edition your province adopts), Rule 14-104 and Table 13 (standard ratings)',
+        AHJ_CHECK_LINE,
       ],
     };
   },
