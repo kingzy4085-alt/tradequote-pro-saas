@@ -3,22 +3,11 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       pull-requests: read
@@ -36,10 +25,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://<scrubbed-url-domain>/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
+          plugins: 'code-review@claude-plugins-official'
           prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
           show_full_output: true
-          # See https://<scrubbed-url-domain>/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://<scrubbed-url-domain>/docs/en/cli-reference for available options

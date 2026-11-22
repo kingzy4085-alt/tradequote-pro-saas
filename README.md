@@ -103,9 +103,9 @@ Create a Product with a recurring monthly **CAD** Price at the figure in `lib/pl
 
 Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Without it the assistant says it isn't configured and everything else works.
 
-### 3a. Gemini and Twilio
+### 3a. Gemini
 
-Voice-to-estimate and scope extraction use Google Gemini: set `GEMINI_API_KEY`. Texting a client their proposal link uses Twilio: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` together. Production builds fail if any of these four is missing, and a Twilio setup with only some of the three fails in Preview as well. Preview builds only require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+Voice-to-estimate and scope extraction use Google Gemini: set `GEMINI_API_KEY`. Production builds require it. Preview builds only require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ### 4. Email
 

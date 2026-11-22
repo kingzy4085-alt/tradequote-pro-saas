@@ -1,5 +1,5 @@
 # TradeQuote PRO - Project Rules (Ingzys Automation)
-- Stack: Next.js 14.2 (App Router), TypeScript, Tailwind CSS 3, Supabase (Postgres + Auth + RLS + Storage), Stripe, Resend, Twilio. AI: Anthropic Claude (AI CEC Assistant, model from `env.anthropicModel()`), Google Gemini `gemini-2.5-flash` (voice-to-estimate and scope extraction, `GEMINI_API_KEY`).
+- Stack: Next.js 14.2 (App Router), TypeScript, Tailwind CSS 3, Supabase (Postgres + Auth + RLS + Storage), Stripe, Resend. AI: Anthropic Claude (AI CEC Assistant, model from `env.anthropicModel()`), Google Gemini `gemini-2.5-flash` (voice-to-estimate and scope extraction, `GEMINI_API_KEY`).
 - Domain: B2B SaaS for electrical & industrial shutdown contractors (tradequotepro.com), Canada. Tiers: Solo ($49/mo CAD), Shop/Crew ($99/mo CAD).
 - Core Modules: Quote Pipeline & Assemblies, Voice-to-Estimate, Client Portal, Timecards, Change Orders, Daily/Tailgate/LOTO Safety Logs, WCB Tracking, AI CEC Assistant.
 - Efficiency Rules:
