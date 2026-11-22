@@ -67,6 +67,8 @@ Create a new project, then run **all** of these in the SQL editor, in this order
 | 12 | `20261104000310_contract_rules.sql` | Who can read contract money, what a stale draft can bill |
 | 13 | `20261104000320_review_fixes.sql` | Fixes from review of money, security and first use |
 
+The table above lists the first 13 files only. `supabase/migrations/` holds more: run every file after number 13 in filename order too (`npm run db:check` checks the versions are unique and well-named).
+
 The old scripts in `database/legacy/` are for reference only. Don't run them.
 
 **Auth → URL configuration:** set the Site URL to your app URL and add `https://YOUR-DOMAIN/auth/callback` to the redirect URLs.
@@ -83,6 +85,16 @@ The old scripts in `database/legacy/` are for reference only. Don't run them.
 | Change Email Address | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change` |
 | Reset Password | `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` |
 
+**Password reset flow (scanner-safe).** Mail security scanners open every link before the person does, so a reset link must not spend its one-time token on a plain GET. The flow is:
+
+1. The Reset Password template must link to `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery` exactly as in the table above. Do not use `{{ .ConfirmationURL }}`, which uses the PKCE flow and only works in the browser that asked.
+2. `GET /auth/callback` sees `type=recovery` and redirects (303) to `/auth/confirm` **without verifying** the token.
+3. `/auth/confirm` shows a Continue button. A scanner doesn't press it, so the token stays unused.
+4. Pressing Continue sends `POST /auth/callback`, which verifies the token hash once and signs the person in.
+5. They land on `/update-password` to choose a new password. Invites take the same last step, then continue to onboarding.
+
+This is a manual setting in the Supabase Dashboard (Auth → Email Templates → Reset Password). The repository can't change it, so check it after setting up a new Supabase project.
+
 ### 2. Stripe
 
 Create a Product with a recurring monthly **CAD** Price at the figure in `lib/plan.ts` and copy its `price_...` id. Add a webhook endpoint at `https://YOUR-DOMAIN/api/stripe/webhook` for `checkout.session.completed` and `customer.subscription.created/updated/deleted`. Turn on the customer portal. Turn on Stripe Tax if you want GST/HST/PST calculated, then set `STRIPE_AUTOMATIC_TAX=true`.
@@ -90,6 +102,10 @@ Create a Product with a recurring monthly **CAD** Price at the figure in `lib/pl
 ### 3. Claude API
 
 Create a key at console.anthropic.com and set `ANTHROPIC_API_KEY`. Without it the assistant says it isn't configured and everything else works.
+
+### 3a. Gemini and Twilio
+
+Voice-to-estimate and scope extraction use Google Gemini: set `GEMINI_API_KEY`. Texting a client their proposal link uses Twilio: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` together. Production builds fail if any of these four is missing, and a Twilio setup with only some of the three fails in Preview as well. Preview builds only require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ### 4. Email
 
@@ -250,7 +266,6 @@ Left in place on purpose. None of it is used by the app.
 | --- | --- |
 | `.continue/` | **Check it first. It may hold an API key.** `.continue/agents/new-config.yaml` is tracked in git and on `origin`, since commit `ae88835`. The two earlier audits disagree: one reported a plaintext provider key in it, the other saw no secret, and it was not opened for this write-up. Only you can settle it. If there is a key, revoke it at the provider, since deleting the file doesn't remove it from history, and consider rewriting history. Either way, untrack the folder and add it to `.gitignore` |
 | `.lucky/` | Tracked tool leftovers. Delete |
-| `architecture-audit.txt` | Tracked old notes. Delete |
 | `database/legacy/` | Old SQL kept for reference. Never run it. Delete when you no longer want it |
 | `tests/_tmp/` | One leftover scratch file that tests nothing. Delete |
 | `eslint.config.mjs` | References packages that aren't installed, so linting doesn't run. Install ESLint and add a CI step, or delete the file |

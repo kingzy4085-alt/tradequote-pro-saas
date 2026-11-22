@@ -416,6 +416,14 @@ describe('seams that hold: routes and the service role', () => {
       if (open.has(path)) continue;
       expect(/requireApi\(|requireCron\(|auth\.getUser\(|from '@\/lib\/crud'/.test(src), path).toBe(true);
     }
+    // Calling requireApi is not enough: it returns the refusal rather than throwing it, so a route
+    // that ignores the result lets everyone through. Every call keeps the result and returns a refusal.
+    for (const { path, src } of routes) {
+      const calls = src.match(/requireApi\(/g)?.length ?? 0;
+      if (!calls) continue;
+      const kept = [...src.matchAll(/const (\w+) = await requireApi\(\{[^}]*\}\);\s*if \(\1 instanceof Response\)/g)].length;
+      expect(kept, `${path} must check what requireApi returns`).toBe(calls);
+    }
     expect(routes.find((r) => r.path.endsWith('stripe/webhook/route.ts'))!.src).toContain('constructEvent');
     expect(routes.find((r) => r.path.endsWith('email/unsubscribe/route.ts'))!.src).toContain('verifyUnsubscribeToken');
     // The client portal's credential is the link's token: checked before anything else, then rate-limited and looked up by its hash

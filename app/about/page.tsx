@@ -1,4 +1,8 @@
 import Link from 'next/link';
+import { SiteFooter, SiteShell } from '@/components/marketing/site-footer';
+import { SiteHeader } from '@/components/marketing/site-header';
+import { pageMeta } from '@/components/marketing/seo';
+import { BTN_GHOST, BTN_PRIMARY, H, WRAP } from '@/components/marketing/ui';
 
 const AREAS = [
   ['Bidding', 'Clients, estimates, proposals from the same record, RFQs and bid opportunities'],
@@ -11,42 +15,48 @@ const AREAS = [
   ['Alerts', 'Overdue invoices, expiring insurance and open safety items flagged every day, in the app and by email'],
 ];
 
-export const metadata = { title: 'About · TradeQuote PRO' };
+export const metadata = pageMeta({
+  title: 'About TradeQuote PRO',
+  description: 'TradeQuote PRO is one app for running an electrical, industrial or general contracting business in Canada, from the first client call to the final bill.',
+  path: '/about',
+});
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <Link href="/pricing" className="text-xs font-semibold text-amber-500 hover:underline uppercase tracking-wider">← TradeQuote PRO</Link>
-        <h1 className="text-3xl font-bold tracking-tight text-white mt-1">About TradeQuote PRO</h1>
-        <p className="text-slate-400 mt-1">Industrial Shutdown & Electrical Contracting Operations Hub</p>
+    <SiteShell>
+      <SiteHeader />
+      <main className={`${WRAP} max-w-5xl py-12 sm:py-16`}>
+        <h1 className={`${H} text-5xl text-white sm:text-7xl`}>About TradeQuote PRO</h1>
+        <p className="mt-3 text-lg text-slate-400">Industrial Shutdown &amp; Electrical Contracting Operations Hub</p>
 
-        <div className="mt-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-slate-300 space-y-4">
+        <div className="mt-8 max-w-3xl space-y-4 text-lg text-slate-300">
           <p>TradeQuote PRO is one app for running an electrical or industrial contracting business — from the first client call to the final bill.</p>
           <p>It is built for Canadian contractors: estimators who are tired of re-typing spreadsheets, office staff chasing paperwork, and field crews who need big buttons that work with gloves on and in sunlight.</p>
         </div>
 
-        <h2 className="text-xl font-bold text-white mt-10 mb-4">What&apos;s inside</h2>
-        <div className="grid sm:grid-cols-2 gap-4">
+        <h2 className={`${H} mt-14 text-3xl text-white sm:text-4xl`}>What&apos;s inside</h2>
+        <dl className="mt-6 grid gap-x-12 sm:grid-cols-2">
           {AREAS.map(([t, d]) => (
-            <div key={t} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-              <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider">{t}</p>
-              <p className="text-slate-300 mt-2 text-sm">{d}</p>
+            <div key={t} className="border-t border-slate-800 py-5">
+              <dt className="font-bold text-amber-300">{t}</dt>
+              <dd className="mt-1.5 text-sm text-slate-300">{d}</dd>
             </div>
           ))}
+        </dl>
+
+        <div className="mt-10 grid gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm sm:grid-cols-3">
+          <div><p className="font-semibold text-slate-400">Version</p><p className="mt-1 text-white">1.0</p></div>
+          <div><p className="font-semibold text-slate-400">Works on</p><p className="mt-1 text-white">Windows, Android, iPhone, any browser</p></div>
+          <div><p className="font-semibold text-slate-400">Data</p><p className="mt-1 text-white">Encrypted cloud database; each company sees only its own records</p></div>
         </div>
 
-        <div className="mt-10 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl grid sm:grid-cols-3 gap-4 text-sm">
-          <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Version</p><p className="text-white mt-1">1.0</p></div>
-          <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Works on</p><p className="text-white mt-1">Windows, Android, iPhone, any browser</p></div>
-          <div><p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Data</p><p className="text-white mt-1">Encrypted cloud database; each company sees only its own records</p></div>
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+          <Link href="/signup" className={BTN_PRIMARY}>Start free trial</Link>
+          <Link href="/demo" className={BTN_GHOST}>Try the live demo</Link>
+          <Link href="/pricing" className={BTN_GHOST}>Pricing</Link>
         </div>
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/signup" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-semibold px-5 py-3 rounded-xl">Start free trial</Link>
-          <Link href="/pricing" className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold px-5 py-3 rounded-xl border border-slate-700">Pricing</Link>
-        </div>
-      </div>
-    </main>
+      </main>
+      <SiteFooter />
+    </SiteShell>
   );
 }

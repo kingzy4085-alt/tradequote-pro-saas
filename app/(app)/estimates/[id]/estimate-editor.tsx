@@ -4,12 +4,19 @@ import { AiScopeUpload } from '@/components/estimates/AiScopeUpload';
 import { VoiceEstimateRecorder } from '@/components/estimates/VoiceEstimateRecorder';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Input, Label, PageHeader, Panel, Select, Textarea } from '@/components/ui';
 import { assemblySummary, expandAssembly, filterAssemblies, insertLines, isFilledLine, parseMultiplier, type Assembly } from '@/lib/assemblies';
 import { estimateTotals, type EstimateLine } from '@/lib/estimate-math';
 import { DEFAULT_NPT_PERCENT, isPermitLine, nptLine, parseNptPercent, permitDescription, productiveHours, withNptAllowance, withPermitLine } from '@/lib/industrial';
 import { formatMoney } from '@/lib/format';
+import AiEstimatePanel from '@/components/estimates/ai-estimate-panel';
+import CalculatorPanel from '@/components/estimates/calculator-panel';
+import PriceBookPanel from '@/components/estimates/price-book-panel';
+import { LabourRateHelper, TaxHelper } from '@/components/estimates/rate-helpers';
+import { usePriceBook } from '@/components/estimates/use-price-book';
+import { getRegion, regionsForProvince, type Trade } from '@/lib/costbook';
+import { REGION_STORAGE_KEY, appendExclusions, hasMetros, resolveRegion } from '@/lib/estimate-helpers';
 
 const BLANK: EstimateLine = { description: '', quantity: 1, unit: 'ea', material_unit_cost: 0, labour_hours_per_unit: 0 };
 const HEADER_KEYS = ['title', 'status', 'client_name', 'client_address', 'labour_rate', 'markup_percentage', 'tax_percentage', 'scope', 'terms'] as const;
@@ -49,7 +56,7 @@ export default function EstimateEditor({
     };
     editItems([...items, newLine]);
   };
-  
+
   const router = useRouter();
   const [converting, setConverting] = useState(false);
   // What the client was shown can't move under them. The database refuses it too.
@@ -74,6 +81,42 @@ export default function EstimateEditor({
   const [asmBusy, setAsmBusy] = useState(false);
   const [asmError, setAsmError] = useState('');
   const [asmNote, setAsmNote] = useState('');
+  // Pricing tools: region, company prices, and which tool is open (each stays mounted once opened, so typing is not lost)
+  const [region, setRegion] = useState(() => resolveRegion(null, province));
+  const [tool, setTool] = useState<'ai' | 'book' | 'calc' | null>(null);
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const [toolNote, setToolNote] = useState('');
+  // Most customers are electrical contractors: start there, so the labour class is an electrician and
+  // Manitoba's RST on electrical systems applies. A general-trades job switches it in one click.
+  const [workTrade, setWorkTrade] = useState<Trade>('electrical');
+  const [pendingExclusions, setPendingExclusions] = useState<string[]>([]);
+  const priceBook = usePriceBook();
+  const needPrices = useCallback(() => void priceBook.load(), [priceBook.load]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(REGION_STORAGE_KEY);
+      if (saved) setRegion(resolveRegion(saved, province));
+    } catch {
+      // Private mode or blocked storage: the province's own region stays
+    }
+  }, [province]);
+  const pickRegion = (code: string) => {
+    setRegion(code);
+    try {
+      window.localStorage.setItem(REGION_STORAGE_KEY, code);
+    } catch {
+      // Not remembered, still used for this visit
+    }
+  };
+  const openTool = (next: 'ai' | 'book' | 'calc') => {
+    setToolNote('');
+    setTool((cur) => (cur === next ? null : next));
+    setOpened((o) => new Set(o).add(next));
+  };
+  const addPricedLines = (lines: EstimateLine[], note: string) => {
+    editItems(insertLines(items, lines));
+    setToolNote(note);
+  };
 
   // Warn before leaving with unsaved changes
   useEffect(() => {
@@ -227,6 +270,14 @@ export default function EstimateEditor({
   }
 
   const canEditLines = canWrite && !withClient;
+  const provinceCode = getRegion(province).province;
+  const onAiLines = (lines: EstimateLine[], extras: { scopeText?: string; exclusions?: string[] }) => {
+    editItems(insertLines(items, lines));
+    const filled = !header.scope.trim() && extras.scopeText?.trim();
+    if (filled) editHeader('scope', extras.scopeText!.trim());
+    setPendingExclusions(extras.exclusions?.filter((e) => e.trim()) ?? []);
+    setToolNote(`Added ${lines.length} ${lines.length === 1 ? 'line' : 'lines'} from the AI draft${filled ? ' and filled in the scope of work' : ''}. Check every quantity and price, then save.`);
+  };
   // Leaving for the Assemblies page drops anything unsaved here
   const leaveCheck = (e: { preventDefault: () => void }) => {
     if (dirty && !window.confirm('You have unsaved changes on this estimate. Leave without saving?')) e.preventDefault();
@@ -244,7 +295,7 @@ export default function EstimateEditor({
         {canEditLines && <VoiceEstimateRecorder onLines={(lines) => editItems(insertLines(items, lines))} />}
         <AiScopeUpload onExtracted={handleScopeExtracted} />
       </div>
-    <PageHeader
+      <PageHeader
         title={header.title || 'Untitled estimate'}
         subtitle={header.client_name || undefined}
         back={{ href: '/estimates', label: 'Back to Estimates' }}
@@ -318,6 +369,12 @@ export default function EstimateEditor({
               <Select id="status" options={statuses} value={header.status} disabled={!canWrite} onChange={(e) => editHeader('status', e.target.value)} />
             </div>
           </div>
+          {canWrite && !withClient && (
+            <div className="grid sm:grid-cols-2 gap-4 mt-4">
+              <LabourRateHelper province={provinceCode} trade={workTrade} onUse={(rate) => editHeader('labour_rate', String(rate))} />
+              <TaxHelper province={provinceCode} trade={workTrade} onTradeChange={setWorkTrade} onUse={(pct) => editHeader('tax_percentage', String(pct))} />
+            </div>
+          )}
         </Panel>
 
         <section className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
@@ -410,6 +467,59 @@ export default function EstimateEditor({
               </div>
               <p className="text-sm text-slate-400">The allowance covers time that installs nothing: lockout/tagout, site orientation, permits and waiting on isolations.</p>
               {extraNote && <Alert tone={extraNote.tone}>{extraNote.text}</Alert>}
+            </div>
+          )}
+          {canEditLines && (
+            <div className="p-3 border-t border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {([['ai', 'Draft with AI'], ['book', 'Add from price book'], ['calc', 'Calculators']] as const).map(([k, label]) => (
+                  <Button key={k} variant={tool === k ? 'primary' : 'secondary'} aria-expanded={tool === k} onClick={() => openTool(k)}>
+                    {label}
+                  </Button>
+                ))}
+                {hasMetros(province) && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Label htmlFor="price-region">Price for</Label>
+                    <div className="w-56">
+                      <Select id="price-region" value={region} onChange={(e) => pickRegion(e.target.value)} options={regionsForProvince(provinceCode).map((r) => ({ value: r.code, label: r.name }))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {toolNote && <Alert tone="success">{toolNote}</Alert>}
+              {pendingExclusions.length > 0 && (
+                <Alert tone="info">
+                  The AI draft listed {pendingExclusions.length} {pendingExclusions.length === 1 ? 'exclusion' : 'exclusions'}. Add them to the terms as an Exclusions list?
+                  <span className="flex flex-wrap gap-3 mt-3">
+                    <Button
+                      onClick={() => {
+                        editHeader('terms', appendExclusions(header.terms, pendingExclusions));
+                        setPendingExclusions([]);
+                      }}
+                    >
+                      Add to terms
+                    </Button>
+                    <Button variant="secondary" onClick={() => setPendingExclusions([])}>
+                      No thanks
+                    </Button>
+                  </span>
+                </Alert>
+              )}
+              {opened.has('ai') && (
+                <div className={tool === 'ai' ? '' : 'hidden'}>
+                  <AiEstimatePanel canWrite={canEditLines} onAddLines={onAiLines} />
+                </div>
+              )}
+              {opened.has('book') && (
+                <div className={tool === 'book' ? '' : 'hidden'}>
+                  <PriceBookPanel region={region} prices={priceBook.prices} pricesState={priceBook.state} onNeedPrices={needPrices} onAdd={addPricedLines} />
+                </div>
+              )}
+              {opened.has('calc') && (
+                <div className={tool === 'calc' ? '' : 'hidden'}>
+                  <CalculatorPanel region={region} prices={priceBook.prices} onNeedPrices={needPrices} onAdd={addPricedLines} />
+                </div>
+              )}
             </div>
           )}
           {canEditLines && (asmNote || panel) && (
