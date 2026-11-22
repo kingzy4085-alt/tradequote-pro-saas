@@ -1,4 +1,4 @@
-import { AHJ_CHECK_LINE, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtLeast, values } from '../common';
+import { AHJ_CHECK_LINE, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtLeast, terminationField, TERMINATION_WARNING, values } from '../common';
 import { SIZES, STD_OCPD, resistanceOhmPerM, sizesFor, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -7,7 +7,8 @@ const fields: CalcField[] = [
   numField('distance', 'Distance from the panel to the charger', 'm', 15, 1, 300, 0.5),
   selField('material', 'Conductor material', 'cu', [['cu', 'Copper'], ['al', 'Aluminum']]),
   selField('size', 'Conductor size for pricing and voltage drop', 'none', [['none', 'Not chosen yet'], ...SIZES.map((s) => [s, awgLabel(s)] as [string, string])], 'You choose the size. It does not set any ampacity: enter the ampacity from your code book below to check it.'),
-  numField('conductorAmpacity', 'Ampacity of your chosen conductor (optional)', 'A', 0, 0, 2000, 1, 'Read from the code book ampacity table for your conductor, material and insulation at 75 °C. If you enter it, it is checked against 125% of the charger current. Leave at 0 to skip.'),
+  numField('conductorAmpacity', 'Ampacity of your chosen conductor (optional)', 'A', 0, 0, 2000, 1, 'Read from the code book ampacity table for your conductor, material and insulation, in the column for the termination temperature chosen below. If you enter it, it is checked against 125% of the charger current. Leave at 0 to skip.'),
+  terminationField(),
   numField('service', 'Existing service size', 'A', 100, 60, 800, 5),
   numField('existing', 'Existing calculated load (Rule 8-200)', 'A', 60, 0, 800, 1, 'From the dwelling load calculator, before the charger.'),
   boolField('evems', 'Energy management system installed (EVEMS)', false, 'A system that limits the charger so the service is never overloaded.'),
@@ -34,11 +35,12 @@ export const evChargerCircuit: Calculator = {
     const chosen = size !== 'none' && (material === 'cu' || size !== '14') ? size : undefined;
     if (size !== 'none' && !chosen) warnings.push('Aluminum building wire is not made in 14 AWG; choose another size.');
     const dropOk = sizesFor(material).find((sz) => vdPct(sz) <= 3 + 1e-9);
-    const drop = chosen ? vdPct(chosen) : 0;
-    if (chosen && drop > 3) warnings.push(`${awgLabel(chosen)} drops ${fmt(drop, 2)}% over ${fmt(p.n('distance'), 0)} m, over 3% (Rule 8-102).${dropOk ? ` ${awgLabel(dropOk)} is the smallest size within 3%, for voltage drop only.` : ''}`);
+    const drop = chosen ? vdPct(chosen) : null;
+    if (chosen && drop !== null && drop > 3) warnings.push(`${awgLabel(chosen)} drops ${fmt(drop, 2)}% over ${fmt(p.n('distance'), 0)} m, over 3% (Rule 8-102).${dropOk ? ` ${awgLabel(dropOk)} is the smallest size within 3%, for voltage drop only.` : ''}`);
     if (!dropOk) warnings.push('No conductor up to 500 kcmil keeps the drop within 3% at this distance; reduce the distance or use a larger run.');
     const cAmp = p.n('conductorAmpacity');
     const ampPass = cAmp > 0 ? cAmp >= need - 1e-9 : null;
+    if (cAmp > 0 && p.s('termination') === '60') warnings.push(TERMINATION_WARNING);
     if (cAmp > 0 && !ampPass) warnings.push(`The conductor ampacity of ${fmt(cAmp, 0)} A is below the ${fmt(need, 1)} A required (125% of the charger current). Choose a larger conductor.`);
     if (cAmp > 0 && breaker && breaker > cAmp + 1e-9) warnings.push(`The ${breaker} A breaker is above the ${fmt(cAmp, 0)} A conductor ampacity. Use a larger conductor or a lower charger setting.`);
     if (!chosen) warnings.push('Choose a conductor size to see the voltage drop and to price the wire; the ampacity must come from your code book.');
@@ -65,12 +67,12 @@ export const evChargerCircuit: Calculator = {
         { label: 'Breaker', value: breaker ? `${breaker} A 2-pole (${fmt(need, 1)} A at 125%)` : 'n/a', emphasis: true },
         { label: 'Required conductor ampacity', value: `${fmt(need, 1)} A (125% of charger current)${ampPass === null ? '' : `; yours ${fmt(cAmp, 0)} A: ${ampPass ? 'Pass' : 'Fail'}`}` },
         { label: 'Conductor chosen', value: hs ? `${awgLabel(hs)} ${material === 'cu' ? 'copper' : 'aluminum'}` : 'not chosen' },
-        { label: 'Voltage drop', value: hs ? `${fmt(drop, 2)}% over ${fmt(p.n('distance'), 0)} m` : 'choose a size' },
+        { label: 'Voltage drop', value: hs && drop !== null ? `${fmt(drop, 2)}% over ${fmt(p.n('distance'), 0)} m` : 'choose a size' },
         { label: 'Smallest size within 3% drop', value: dropOk ? `${awgLabel(dropOk)} (voltage drop only, not ampacity)` : 'none up to 500 kcmil' },
         { label: 'Service capacity', value: short > 0 ? `Short by ${fmt(short, 0)} A` : `${fmt(have - amps, 0)} A to spare` },
         { label: 'Load management', value: short > 0 ? (p.b('evems') ? 'EVEMS covers the shortfall' : 'EVEMS or a service upgrade needed') : 'Not needed' },
       ],
-      values: values({ charger_a: amps, breaker_a: breaker, required_ampacity_a: round(need, 1), conductor_size: hs ?? null, conductor_passes: ampPass, min_size_for_drop: dropOk ?? null, voltage_drop_pct: round(drop, 2), free_capacity_a: round(have, 1), short_a: round(Math.max(0, short), 1), evems_needed: short > 0 && !p.b('evems') }),
+      values: values({ charger_a: amps, breaker_a: breaker, required_ampacity_a: round(need, 1), conductor_size: hs ?? null, conductor_passes: ampPass, min_size_for_drop: dropOk ?? null, voltage_drop_pct: drop !== null ? round(drop, 2) : null, free_capacity_a: round(have, 1), short_a: round(Math.max(0, short), 1), evems_needed: short > 0 && !p.b('evems') }),
       takeoff,
       warnings,
       references: [

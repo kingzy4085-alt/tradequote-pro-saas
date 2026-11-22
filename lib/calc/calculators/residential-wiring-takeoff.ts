@@ -81,7 +81,7 @@ export const residentialWiringTakeoff: Calculator = {
     warnings.push('Counts are estimates from room counts and area. Receptacle numbers assume square rooms and the 1.8 m rule of CEC 26-712; a drawing-based takeoff will differ.');
     warnings.push('The range, dryer and water heater circuits are not included; add them from the dwelling load calculator results.');
     if (p.b('ev')) warnings.push('An EV circuit was counted as one 2-pole breaker; size it with the EV charger calculator.');
-    warnings.push('Smoke alarms are counted per storey and in every bedroom; carbon monoxide alarms by sleeping area. Confirm with NBC 9.10.19 and 9.33.4 and your provincial amendments.');
+    warnings.push('Smoke alarms are counted per storey and in every bedroom; carbon monoxide alarms by sleeping area. The count assumes carbon monoxide alarms where a fuel-burning appliance is present, near the sleeping areas. Confirm the alarm requirements in the National Building Code and your provincial amendments.');
     const potLine = pots > 0 ? core('POT-4IN', pots) : null;
     const takeoff = compact([
       core('REC-15A-TR', rec15), core('REC-20A-TR', rec20), core('REC-GFCI', gfci), core('REC-WP-COVER', ext),
@@ -109,7 +109,7 @@ export const residentialWiringTakeoff: Calculator = {
       warnings,
       references: [
         'CEC 2024 Rule 26-712 (receptacle spacing in dwellings: no point along the floor line more than 1.8 m from a receptacle; counter spacing), Rule 26-700 (GFCI). AFCI scope varies by edition and province: confirm with the authority having jurisdiction',
-        'CEC Rule 8-304 (up to 12 outlets on a 15 A circuit); NBC 9.10.19 smoke alarms and 9.33.4 carbon monoxide alarms',
+        'CEC Rule 8-304 (up to 12 outlets on a 15 A circuit); NBC smoke alarm and carbon monoxide alarm requirements, in words only',
         'Cable: 4.5 m per outlet plus a home run of 6 m, 4 m per extra storey and 0.3 x the square root of the area; 10% added for waste',
         AHJ_CHECK_LINE,
       ],

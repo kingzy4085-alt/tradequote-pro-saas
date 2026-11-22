@@ -214,3 +214,18 @@ describe('compliance guardrails', () => {
     expect(bad.isError).toBe(true);
   });
 });
+
+describe('code-book values are never supplied by the assistant', () => {
+  const must = ['ampacity', 'derating', 'full-load current', 'overcurrent percentages', 'volume allowances', 'conduit diameters', 'never fill it in from memory'];
+  it('says so in the system prompt', () => {
+    for (const m of must) expect(SYSTEM_PROMPT, m).toContain(m);
+    expect(SYSTEM_PROMPT).toContain('never report a Pass or Fail that depends on a value you supplied yourself');
+  });
+  it('says so in the run_calculator tool description for every role', () => {
+    for (const role of ['electrician', 'owner'] as Role[]) {
+      const d = assistantTools(role).find((t) => t.name === 'run_calculator')!.description ?? '';
+      for (const m of must) expect(d, `${role}: ${m}`).toContain(m);
+      expect(d).toContain('never report a Pass that depends on a value you supplied yourself');
+    }
+  });
+});

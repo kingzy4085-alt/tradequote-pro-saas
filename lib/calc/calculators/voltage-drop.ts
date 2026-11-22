@@ -75,6 +75,7 @@ export const voltageDrop: Calculator = {
     if (total > 5) warnings.push(`Total drop of ${fmt(total, 2)}% from the service is over the 5% limit (Rule 8-102).`);
     if (!best) warnings.push(`No size up to 500 kcmil keeps the drop within ${fmt(allowed, 1)}%. Use parallel conductors or a higher voltage.`);
     if (lengthFt <= 0) warnings.push('Enter a length to see the drop.');
+    if (sys.phases !== 0 && /^\d{3}$/.test(size) && Number(size) >= 250) warnings.push(`Resistance here is the DC value. At ${awgLabel(size)} and above, skin and proximity effects make the AC drop higher than this figure shows, so treat the result as optimistic and use the conductor maker's AC resistance for a closer figure.`);
     if (sys.phases === 0) warnings.push('DC drop uses resistance only. Check the conductor ampacity separately, and confirm any extra-low-voltage limits with the authority having jurisdiction.');
 
     const takeoff = compact([

@@ -41,38 +41,45 @@ export const boxFill: Calculator = {
     const p = readFields(input, fields, warnings);
     let conductorMl = 0;
     let conductorCount = 0;
+    const missing: string[] = [];
     for (const s of SIZES_USED) {
       const n = Math.round(p.n(`n${s}`));
       conductorCount += n;
       conductorMl += n * p.n(`ml${s}`);
+      if (n > 0 && p.n(`ml${s}`) <= 0) missing.push(`${s} AWG allowance per conductor`);
       if (n > 0 && p.n(`ml${s}`) <= 0) warnings.push(`${n} x ${s} AWG counted but no allowance was entered for ${s} AWG, so they add 0 mL. Enter the Rule 12-3034 figure.`);
     }
     const devices = Math.round(p.n('devices'));
     const clamps = Math.round(p.n('clamps'));
     const deviceMl = devices * p.n('deviceMl');
     const clampMl = clamps * p.n('clampMl');
+    if (devices > 0 && p.n('deviceMl') <= 0) missing.push('allowance per device');
+    if (clamps > 0 && p.n('clampMl') <= 0) missing.push('allowance per clamp set');
     if (devices > 0 && p.n('deviceMl') <= 0) warnings.push('Devices are counted but no allowance per device was entered, so they add 0 mL. Look it up in Rule 12-3034.');
     if (clamps > 0 && p.n('clampMl') <= 0) warnings.push('Clamps are counted but no allowance per clamp set was entered, so they add 0 mL. Look it up in Rule 12-3034.');
     const required = conductorMl + deviceMl + clampMl + p.n('otherMl');
     const boxMl = p.n('boxMl');
     const entered = boxMl > 0;
-    const pass = entered && boxMl >= required - 1e-9;
+    const counted = conductorCount > 0 || devices > 0 || clamps > 0 || p.n('otherMl') > 0;
+    // A verdict needs the box volume and a positive allowance for every counted item; nothing is assumed
+    const judged = entered && counted && missing.length === 0;
+    const pass = judged && boxMl >= required - 1e-9;
     if (!entered) warnings.push('Enter the box volume marked on the box to get a pass or fail.');
-    else if (!pass) warnings.push(`The box holds ${fmt(boxMl, 1)} mL but ${fmt(required, 1)} mL is required. Use a larger box.`);
+    else if (missing.length > 0) warnings.push(`No pass or fail is shown yet. Enter the ${missing.join(', ')} from your code book.`);
+    else if (judged && !pass) warnings.push(`The box holds ${fmt(boxMl, 1)} mL but ${fmt(required, 1)} mL is required. Use a larger box.`);
     if (conductorCount === 0 && devices === 0 && clamps === 0 && p.n('otherMl') <= 0) warnings.push('No conductors, devices or allowances entered.');
-    if (entered && required <= 0) warnings.push('The required volume is 0 mL, so check that the allowances were entered.');
     const qty = Math.round(p.n('qty'));
     const pick = BOX_PRICING.find((b) => b.id === p.s('boxType'));
     const takeoff = pick && pass ? compact([core(pick.code, qty)]) : [];
     return {
       summary: [
-        { label: 'Result', value: !entered ? 'Enter the box volume' : pass ? 'Pass' : 'Fail', emphasis: true },
-        { label: 'Volume required', value: `${fmt(required, 1)} mL` },
+        { label: 'Result', value: !entered ? 'Enter the box volume' : !counted ? 'Enter conductors or devices' : missing.length > 0 ? 'Enter the allowances' : pass ? 'Pass' : 'Fail', emphasis: true },
+        { label: 'Volume required', value: `${fmt(required, 1)} mL${missing.length > 0 ? ' so far (allowances missing)' : ''}` },
         { label: 'Box volume as marked', value: entered ? `${fmt(boxMl, 1)} mL` : 'not entered' },
-        { label: 'Space remaining', value: entered ? `${fmt(boxMl - required, 1)} mL` : 'n/a' },
+        { label: 'Space remaining', value: judged ? `${fmt(boxMl - required, 1)} mL` : 'n/a' },
         { label: 'Breakdown', value: `conductors ${fmt(conductorMl, 1)} mL, devices ${fmt(deviceMl, 1)} mL, clamps ${fmt(clampMl, 1)} mL, other ${fmt(p.n('otherMl'), 1)} mL` },
       ],
-      values: values({ required_ml: round(required, 1), conductors_ml: round(conductorMl, 1), devices_ml: round(deviceMl, 1), clamps_ml: round(clampMl, 1), box_ml: entered ? boxMl : null, passes: entered ? pass : null, remaining_ml: entered ? round(boxMl - required, 1) : null }),
+      values: values({ required_ml: round(required, 1), conductors_ml: round(conductorMl, 1), devices_ml: round(deviceMl, 1), clamps_ml: round(clampMl, 1), box_ml: entered ? boxMl : null, passes: judged ? pass : null, remaining_ml: judged ? round(boxMl - required, 1) : null }),
       takeoff,
       warnings,
       references: [

@@ -1,4 +1,4 @@
-import { AHJ_CHECK_LINE, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtMost, values } from '../common';
+import { AHJ_CHECK_LINE, awgLabel, compact, core, coreOrFree, fmt, free, numField, readFields, round, selField, boolField, stdAtMost, terminationField, TERMINATION_WARNING, values } from '../common';
 import { SIZES, STD_OCPD } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -17,7 +17,8 @@ const fields: CalcField[] = [
   selField('device', 'Branch-circuit protection device', 'breaker', [['breaker', 'Inverse-time breaker'], ['delay', 'Time-delay fuse'], ['fuse', 'Non-time-delay fuse']], 'Only labels the result. The percentage below is the one that counts.'),
   numField('maxPct', 'Maximum overcurrent percentage for that device', '%', 0, 0, 1000, 1, 'Read it from the code book table of maximum branch-circuit protection for motors (Table 29), for your device type and starter or motor type. Not supplied by this calculator. 0 means not entered yet.'),
   selField('conductorSize', 'Conductor size for pricing (optional)', 'none', [['none', 'No cable takeoff'], ...SIZES.map((s) => [s, awgLabel(s)] as [string, string])], 'Only used to price the Teck90 cable. It does not set any ampacity.'),
-  numField('conductorAmpacity', 'Ampacity of your chosen conductor (optional)', 'A', 0, 0, 2000, 1, 'Read from the code book ampacity table for the conductor at 75 °C. If you enter it, the result is checked against 125% of the full-load current. Leave at 0 to skip the check.'),
+  numField('conductorAmpacity', 'Ampacity of your chosen conductor (optional)', 'A', 0, 0, 2000, 1, 'Read from the code book ampacity table for the conductor, in the column for the termination temperature chosen below. If you enter it, the result is checked against 125% of the full-load current. Leave at 0 to skip the check.'),
+  terminationField(),
   numField('length', 'Run length to the motor', 'm', 20, 0, 1000, 0.5, 'Used for the Teck90 cable takeoff.'),
 ];
 
@@ -57,6 +58,7 @@ export const motorCircuit: Calculator = {
     const cAmp = p.n('conductorAmpacity');
     const checked = haveFla && cAmp > 0;
     const condPass = checked ? cAmp >= minAmp - 1e-9 : null;
+    if (checked && p.s('termination') === '60') warnings.push(TERMINATION_WARNING);
     if (checked && !condPass) warnings.push(`The conductor ampacity of ${fmt(cAmp, 0)} A is below the ${fmt(minAmp, 1)} A required (125% of full-load current). Choose a larger conductor.`);
     const discA = fla * 1.15;
     const disc = !haveFla ? undefined : three ? (discA <= 100 && volts <= 600 ? 'DISC-100A' : undefined) : discA <= 60 ? 'DISC-60A' : undefined;
@@ -75,14 +77,14 @@ export const motorCircuit: Calculator = {
     return {
       summary: [
         { label: 'Full-load current', value: haveFla ? `${fmt(fla, 1)} A${plate > 0 ? ' (nameplate)' : ' (code book motor table)'}` : 'Enter the full-load current', emphasis: true },
-        { label: 'Minimum conductor ampacity', value: haveFla ? `${fmt(minAmp, 1)} A (125% of full-load current, 75 °C basis)` : 'n/a' },
+        { label: 'Minimum conductor ampacity', value: haveFla ? `${fmt(minAmp, 1)} A (125% of full-load current)` : 'n/a' },
         { label: 'Your conductor', value: checked ? `${fmt(cAmp, 0)} A: ${condPass ? 'Pass' : 'Fail'}` : 'not checked' },
         { label: 'Overload setting', value: overload !== null ? `${fmt(overload, 1)} A (${p.b('sf') ? 125 : 115}% of ${fmt(plate, 1)} A nameplate)` : 'Enter the nameplate current' },
         { label: 'Maximum breaker or fuse', value: maxDevice !== null ? `${fmt(maxDevice, 0)} A calculated (${deviceLabel}, ${fmt(pct, 0)}%); ${std ?? 'below 15'} A standard` : 'Enter the code book percentage' },
         { label: 'NEMA starter size', value: starterSize ? `Size ${starterSize}` : 'special' },
         { label: 'Disconnect', value: haveFla ? `at least ${fmt(discA, 0)} A (115% of full-load current)` : 'n/a' },
       ],
-      values: values({ hp, fla_a: round(fla, 2), table_fla_a: tableFla > 0 ? tableFla : null, min_conductor_ampacity_a: round(minAmp, 2), conductor_passes: condPass, conductor_size: hasSize ? size : null, overload_a: overload !== null ? round(overload, 2) : null, max_device_pct: pct > 0 ? pct : null, max_device_a: maxDevice !== null ? round(maxDevice, 1) : null, std_device_a: std, starter_size: starterSize ?? null, disconnect_a: round(discA, 1) }),
+      values: values({ hp, fla_a: haveFla ? round(fla, 2) : null, table_fla_a: tableFla > 0 ? tableFla : null, min_conductor_ampacity_a: haveFla ? round(minAmp, 2) : null, conductor_passes: condPass, conductor_size: hasSize ? size : null, overload_a: overload !== null ? round(overload, 2) : null, max_device_pct: pct > 0 ? pct : null, max_device_a: maxDevice !== null ? round(maxDevice, 1) : null, std_device_a: std, starter_size: starterSize ?? null, disconnect_a: haveFla ? round(discA, 1) : null }),
       takeoff,
       warnings,
       references: [
