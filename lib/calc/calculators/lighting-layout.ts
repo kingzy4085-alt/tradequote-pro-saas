@@ -86,7 +86,7 @@ export const lightingLayout: Calculator = {
       references: [
         'Lumen method: N = (E x A) / (lumens x CU x LLF)',
         'Target illuminance: IES Lighting Handbook recommended maintained illuminance by task (typical values; the NBC and NECB do not set lux)',
-        'Compare the connected load with the NECB 2020 Part 4 lighting power allowance for the building type',
+        'Compare the connected load with the applicable lighting-power requirements in the energy code adopted for the project',
         AHJ_CHECK_LINE,
       ],
     };

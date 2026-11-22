@@ -783,7 +783,7 @@ describe('second audit round: honest values and wording', () => {
   it('describes transformer protection and CO alarms in words, without unconfirmed rule numbers', () => {
     const xf = run('transformer-sizing');
     const text = JSON.stringify([xf.warnings, xf.references]);
-    expect(text).toContain('Section 26');
+    expect(text).toContain('transformer overcurrent-protection requirements');
     expect(text).not.toMatch(/14-104|Table 13/);
     const res = run('residential-wiring-takeoff');
     expect(JSON.stringify([res.warnings, res.references])).not.toMatch(/9\.33\.4|9\.10\.19/);

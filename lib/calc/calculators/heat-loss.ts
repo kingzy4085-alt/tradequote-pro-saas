@@ -1,7 +1,7 @@
 import { compact, core, fmt, free, numField, readFields, round, selField, values } from '../common';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
-/** NBC 2020 Appendix C Table C-2 January 2.5% design temperature, degrees C, with heating degree-days below 18 C. */
+/** Regional estimating design-temperature data. Verify the applicable current design data for the project jurisdiction before final equipment selection. */
 export const CITIES: Record<string, { label: string; t: number; hdd: number }> = {
   vancouver: { label: 'Vancouver, BC', t: -7, hdd: 2825 },
   victoria: { label: 'Victoria, BC', t: -4, hdd: 2650 },
@@ -37,7 +37,7 @@ const INDOOR_C = 22;
 const FURNACES = [{ input: 60000, code: 'FURNACE-60K' }, { input: 80000, code: 'FURNACE-80K' }, { input: 100000, code: 'FURNACE-100K' }];
 
 const fields: CalcField[] = [
-  selField('city', 'City', 'toronto', Object.entries(CITIES).map(([k, v]) => [k, `${v.label} (${v.t} °C)`] as [string, string]), 'January 2.5% design temperature from NBC 2020 Appendix C.'),
+  selField('city', 'City', 'toronto', Object.entries(CITIES).map(([k, v]) => [k, `${v.label} (${v.t} °C)`] as [string, string]), 'Regional estimating design temperature. Verify the applicable current design data for the project jurisdiction.'),
   numField('area', 'Heated floor area above grade, all floors', 'sq ft', 1800, 300, 20000, 50),
   numField('storeys', 'Storeys', undefined, 2, 1, 3, 1),
   numField('height', 'Ceiling height', 'ft', 8, 7, 14, 0.5),
@@ -92,7 +92,7 @@ export const heatLoss: Calculator = {
     if (city.t <= -25) warnings.push(`At ${city.t} °C many heat pumps lose capacity. Size a cold-climate model from the manufacturer's capacity at the design temperature, and plan backup heat.`);
     if (furnace && furnace.input * afue > outputNeeded * 1.4) warnings.push('The smallest furnace is more than 140% of the load; the house may short-cycle. Consider a modulating unit.');
     warnings.push('This is a rough estimate from typical assemblies, not a CSA F280 heat loss calculation. A permit or a final equipment selection needs F280.');
-    warnings.push(`Design temperature ${city.t} °C is the NBC 2020 Appendix C January 2.5% value; your authority may publish its own. Indoor design temperature is ${INDOOR_C} °C.`);
+    warnings.push(`Design temperature ${city.t} °C is an estimating input. Verify the applicable current design temperature for the project jurisdiction before final equipment selection. Indoor design temperature is ${INDOOR_C} °C.`);
     const takeoff = compact([
       furnace ? core(furnace.code, 1) : free('Gas furnace, two units or larger than 100,000 BTU/h', 1, 'ea'),
       hp ? core(hp, 1, { note: 'cold-climate ducted heat pump; confirm capacity at the design temperature' }) : free(`Heat pump, ${round(Math.ceil(tons * 2) / 2, 1)} tons`, 1, 'ea'),
@@ -111,7 +111,7 @@ export const heatLoss: Calculator = {
       takeoff,
       warnings,
       references: [
-        'NBC 2020 Appendix C Table C-2: January 2.5% design temperature and degree-days below 18 °C by location',
+        'Regional design-temperature data used for estimating; verify the applicable current design data for the project jurisdiction before final equipment selection',
         'Method: sum of U x area x temperature difference for walls, ceiling, windows, doors and foundation, plus infiltration at 1.08 x CFM x temperature difference',
         'Estimate only, not CSA F280-12; assembly U-values and air changes are typical by envelope quality',
       ],

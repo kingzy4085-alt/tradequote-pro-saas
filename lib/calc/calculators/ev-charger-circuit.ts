@@ -76,9 +76,9 @@ export const evChargerCircuit: Calculator = {
       takeoff,
       warnings,
       references: [
-        'CEC Section 86 (electric vehicle charging): branch circuit at 125% of the continuous current (Rule 8-104), summary',
+        'CEC Section 86 provides the general electric-vehicle-charging context; confirm branch-circuit requirements against the electrical code adopted in the project jurisdiction',
         'Conductor ampacity is typed by the user from their own code book; no ampacity table is built in. Voltage drop (Rule 8-102) uses resistance computed from resistivity and conductor area',
-        'Service load: charger counted under Rule 8-200; energy management systems (EVEMS) per Section 86',
+        'Service load for a single dwelling is checked using the Rule 8-200 calculation context; confirm EV energy-management provisions against the electrical code adopted in your province',
         AHJ_CHECK_LINE,
       ],
     };

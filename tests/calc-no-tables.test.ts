@@ -123,3 +123,46 @@ describe('no shipped path carries table-shaped size data', () => {
     expect(findSizeTables("const small = { cu: { '14': 15, '12': 20 } };")).toEqual([]);
   });
 });
+describe('retired edition-sensitive citations stay out of shipped calculator guidance', () => {
+  const SHIPPED = [
+    'lib/calc',
+    'components/calc',
+    'app/tools',
+    'app/demo',
+    'components/marketing',
+    'lib/assistant.ts',
+    'lib/ai-estimate.ts',
+  ];
+
+  const all = SHIPPED.flatMap((rel) => {
+    const abs = join(process.cwd(), rel);
+    return statSync(abs).isDirectory() ? sources(abs) : [abs];
+  });
+
+  const retired = [
+    /Rule 12-3034/i,
+    /Rule 26-712/i,
+    /Rule 26-700/i,
+    /\bTable 29\b/i,
+    /\bTable 44\b/i,
+    /\bTable 45\b/i,
+    /NBC(?: 2020)?(?: Part 9)? Section 9\.15/i,
+    /NBC(?: 2020)? Section 9\.36/i,
+    /\bNBC 9\.25\b/i,
+    /NBC(?: 2020)? Section 9\.26/i,
+    /\b9\.19\.1\.2\b/,
+    /NBC 2020 Appendix C Table C-2/i,
+    /NECB 2020 Part 4/i,
+  ];
+
+  it('does not restore retired specific citations', () => {
+    const hits: string[] = [];
+    for (const file of all) {
+      const text = readFileSync(file, 'utf8');
+      for (const pattern of retired) {
+        if (pattern.test(text)) hits.push(`${relative(process.cwd(), file)}: ${pattern}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+});

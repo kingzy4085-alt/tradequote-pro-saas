@@ -11,11 +11,11 @@ const TECK_SIZES = new Set(['12', '10', '8', '6', '4', '2']);
 const fields: CalcField[] = [
   selField('hp', 'Motor rating', '5', HP_LABEL.map(([v, l]) => [v, `${l} hp`] as [string, string]), 'Used for the NEMA starter size.'),
   selField('supply', 'Supply', '3ph-600', [['1ph-120', 'Single-phase 120 V'], ['1ph-240', 'Single-phase 240 V'], ['3ph-208', 'Three-phase 208 V'], ['3ph-240', 'Three-phase 240 V'], ['3ph-480', 'Three-phase 480 V'], ['3ph-600', 'Three-phase 600 V']]),
-  numField('tableFla', 'Full-load current from the code book motor table', 'A', 0, 0, 2000, 0.1, 'Read it from the code book motor full-load current table for your motor type (Table 44 for three-phase, Table 45 for single-phase), at your motor rating and voltage. Not supplied by this calculator. 0 means not entered yet.'),
+  numField('tableFla', 'Full-load current from the code book motor table', 'A', 0, 0, 2000, 0.1, 'Read it from the applicable motor full-load-current table in the electrical code adopted in your jurisdiction, for your motor type, rating and voltage. Not supplied by this calculator. 0 means not entered yet.'),
   numField('nameplate', 'Nameplate full-load current (optional)', 'A', 0, 0, 1000, 0.1, 'Leave at 0 to size the conductor from the code book value. Overload protection must be set from the nameplate, so no overload figure is shown without it.'),
-  boolField('sf', 'Service factor 1.15 or more, or temperature rise 40 °C or less', true, 'Sets the overload at up to 125% of the nameplate current; otherwise up to 115% (Section 28). Applies only when the nameplate current is entered.'),
+  boolField('sf', 'Service factor 1.15 or more, or temperature rise 40 °C or less', true, 'Select the condition that applies to the motor nameplate. Confirm the permitted overload setting against the motor requirements in the electrical code adopted in your jurisdiction.'),
   selField('device', 'Branch-circuit protection device', 'breaker', [['breaker', 'Inverse-time breaker'], ['delay', 'Time-delay fuse'], ['fuse', 'Non-time-delay fuse']], 'Only labels the result. The percentage below is the one that counts.'),
-  numField('maxPct', 'Maximum overcurrent percentage for that device', '%', 0, 0, 1000, 1, 'Read it from the code book table of maximum branch-circuit protection for motors (Table 29), for your device type and starter or motor type. Not supplied by this calculator. 0 means not entered yet.'),
+  numField('maxPct', 'Maximum overcurrent percentage for that device', '%', 0, 0, 1000, 1, 'Read it from the applicable motor-protection table in the electrical code adopted in your jurisdiction, for your protection device and motor type. Not supplied by this calculator. 0 means not entered yet.'),
   selField('conductorSize', 'Conductor size for pricing (optional)', 'none', [['none', 'No cable takeoff'], ...SIZES.map((s) => [s, awgLabel(s)] as [string, string])], 'Only used to price the Teck90 cable. It does not set any ampacity.'),
   numField('conductorAmpacity', 'Ampacity of your chosen conductor (optional)', 'A', 0, 0, 2000, 1, 'Read from the code book ampacity table for the conductor, in the column for the termination temperature chosen below. If you enter it, the result is checked against 125% of the full-load current. Leave at 0 to skip the check.'),
   terminationField(),
@@ -27,9 +27,9 @@ export const motorCircuit: Calculator = {
   name: 'Motor circuit calculator',
   trade: 'electrical',
   category: 'Electrical design',
-  summary: 'Conductor ampacity, overload setting, maximum breaker or fuse and starter size for a single motor under CEC Section 28, from the full-load current and percentage you read from your code book.',
+  summary: 'Checks motor-circuit values using the full-load current, protection percentage and other values you enter from the electrical code adopted in your jurisdiction.',
   fields,
-  keywords: ['motor', 'fla', 'starter', 'overload', 'nema', 'hp', 'disconnect', 'section 28'],
+  keywords: ['motor', 'fla', 'starter', 'overload', 'nema', 'hp', 'disconnect', 'motor protection'],
   run(input: CalcInput): CalcResult {
     const warnings: string[] = [];
     const p = readFields(input, fields, warnings);
@@ -49,7 +49,7 @@ export const motorCircuit: Calculator = {
     const maxDevice = tableFla > 0 && pct > 0 ? (tableFla * pct) / 100 : null;
     const std = maxDevice !== null ? stdAtMost(STD_OCPD, maxDevice) : null;
     if (maxDevice === null) warnings.push('Enter the code book full-load current and the maximum overcurrent percentage to see the largest breaker or fuse.');
-    else warnings.push(`If ${std ?? 'the'} A will not carry the starting current, Section 28 allows a higher setting in some cases; check the notes to the protection table in your code book. Use the maximum that still starts the motor.`);
+    else warnings.push(`If ${std ?? 'the'} A will not carry the starting current, check the applicable motor-protection requirements and notes in your adopted electrical code before selecting a different setting.`);
     const overload: number | null = plate > 0 ? plate * (p.b('sf') ? 1.25 : 1.15) : null;
     const nemaIdx = three ? NEMA_3PH.find((r) => (volts === 208 ? r[1] : volts === 240 ? r[2] : r[3]) >= hp - 1e-6) : null;
     const nema1 = !three ? NEMA_1PH.find((r) => (volts === 120 ? r[1] : r[2]) >= hp - 1e-6) : null;
@@ -88,9 +88,9 @@ export const motorCircuit: Calculator = {
       takeoff,
       warnings,
       references: [
-        'Full-load current and the maximum overcurrent percentage are typed by the user from their own code book (the motor full-load current tables and Table 29); this calculator does the arithmetic only',
-        'CEC Section 28: motor conductors at 125% of full-load current, overload protection from the nameplate current, branch-circuit protection (summary)',
-        'NEMA ICS 2 starter horsepower ratings for size selection; disconnect at 115% of full-load current (CEC Section 28 disconnecting means)',
+        'Full-load current and the maximum overcurrent percentage are typed by the user from the applicable motor tables in their adopted electrical code; this calculator does the arithmetic only',
+        'Motor conductor, overload and branch-circuit-protection requirements must be confirmed against the electrical code adopted in the project jurisdiction',
+        'NEMA ICS 2 starter horsepower ratings are used for starter size selection; confirm motor disconnect sizing requirements against the electrical code adopted in the project jurisdiction',
         AHJ_CHECK_LINE,
       ],
     };

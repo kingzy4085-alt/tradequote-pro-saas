@@ -58,7 +58,7 @@ export const conductorSize: Calculator = {
     if (entered && termLimit !== null && termLimit < corrected) warnings.push(`The ${term} °C termination limit of ${fmt(termLimit, 0)} A is below the corrected ampacity of ${fmt(corrected, 1)} A, so it governs.`);
     if (entered && termLimit === null && term === 60) warnings.push(`${TERMINATION_WARNING.replace('termination temperature.', 'termination temperature above.')}`);
     if (freeAir && p.n('derating') < 1) warnings.push('A derating factor was entered for free air; check that your code book applies it to single conductors in free air.');
-    if (entered && ocpd !== null && ocpd > effective + 1e-9) warnings.push(`The next standard device above the required ampacity is ${ocpd} A, larger than the ${fmt(effective, 0)} A usable ampacity. Rule 14-104 allows rounding up only in the cases it lists; otherwise use the next lower rating.`);
+    if (entered && ocpd !== null && ocpd > effective + 1e-9) warnings.push(`The next standard device above the required ampacity is ${ocpd} A, larger than the ${fmt(effective, 0)} A usable ampacity. A higher standard overcurrent-device rating is permitted only where allowed by the electrical code adopted in your jurisdiction; otherwise select a compliant rating.`);
     if (hasSize) {
       const cap = smallLimit;
       if (cap) warnings.push(`${awgLabel(size)} ${material === 'cu' ? 'copper' : 'aluminum'} is limited to ${cap} A overcurrent protection (Rule 14-104), so no more than ${cap} A is counted as usable and the overcurrent device is capped at ${cap} A.`);

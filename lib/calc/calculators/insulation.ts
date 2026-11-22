@@ -85,7 +85,7 @@ export const insulation: Calculator = {
       takeoff: final,
       warnings,
       references: [
-        'NBC 2020 Section 9.36 (energy efficiency: minimum insulation by climate zone) and 9.25 (vapour barrier on the warm side)',
+        'Confirm insulation, energy-efficiency and vapour-control requirements against the building code and energy requirements adopted in the project jurisdiction',
         'RSI = R / 5.678; batt R-values per the catalog (R-12 to R-31); extruded polystyrene about R-5 per inch',
         'Blown attic insulation priced per sq ft at R-50; other depths are scaled by R-value',
       ],
