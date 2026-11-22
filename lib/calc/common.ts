@@ -118,6 +118,10 @@ export function stdAtMost(list: readonly number[], x: number): number | null {
 /** One plain reminder carried in the references of every calculator whose result reads like a pass or fail ruling. */
 export const AHJ_CHECK_LINE = 'Check against the CEC edition and amendments your province adopts; confirm with the authority having jurisdiction.';
 
+/** The termination question every ampacity check asks, so the user reads the right code book column. */
+export const terminationField = (): CalcField => selField('termination', 'Termination temperature rating', '60', [['60', '60 °C'], ['75', '75 °C'], ['90', '90 °C']], 'Defaults to 60 °C. Choose 75 °C only when the equipment is marked for 75 °C conductors. The conductor ampacity at this temperature limits the result.');
+export const TERMINATION_WARNING = 'Read the ampacity from the 60 °C column unless the equipment is marked for 75 °C or higher conductors, or enter the ampacity at the termination temperature.';
+
 export const M_PER_FT = 0.3048;
 export const SQFT_PER_M2 = 10.7639;
 export const fmt = (x: number, dp = 1): string => round(x, dp).toLocaleString('en-CA', { maximumFractionDigits: dp });

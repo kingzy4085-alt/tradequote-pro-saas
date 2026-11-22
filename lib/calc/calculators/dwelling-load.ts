@@ -2,18 +2,18 @@ import { AHJ_CHECK_LINE, compact, core, fmt, free, numField, readFields, round, 
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 const fields: CalcField[] = [
-  numField('ground', 'Ground floor area', 'm²', 90, 10, 1000, 1, 'Inside dimensions (Rule 8-110).'),
+  numField('ground', 'Ground floor area', 'm²', 90, 10, 1000, 1, 'Use the living-area measurement method required by the electrical code adopted in your jurisdiction.'),
   numField('upper', 'Upper floor area used for living', 'm²', 0, 0, 1000, 1),
   numField('basement', 'Basement area', 'm²', 90, 0, 1000, 1, 'Counted at 75% when the ceiling is higher than 1.8 m.'),
   boolField('basementHigh', 'Basement ceiling higher than 1.8 m', true),
-  numField('heat', 'Electric space heating (connected)', 'kW', 0, 0, 100, 0.1, '100% of the first 10 kW and 75% of the rest (Section 62).'),
+  numField('heat', 'Electric space heating (connected)', 'kW', 0, 0, 100, 0.1, 'Enter the connected electric space-heating load. Confirm the applicable demand treatment against the electrical code adopted in your jurisdiction.'),
   numField('ac', 'Air conditioning', 'kW', 0, 0, 50, 0.1, 'Counted at 100%.'),
-  boolField('interlock', 'Heating and air conditioning interlocked', false, 'When interlocked only the larger of the two is counted (Rule 8-106 3).'),
+  boolField('interlock', 'Heating and air conditioning interlocked', false, 'When the installation qualifies for interlocked-load treatment, the calculator uses the larger load. Confirm that the installation qualifies under the electrical code adopted in your jurisdiction.'),
   numField('range', 'Electric range', 'kW', 12, 0, 40, 0.5, '0 if there is no electric range.'),
   numField('waterHeater', 'Water heater', 'kW', 3, 0, 20, 0.1),
   boolField('tankless', 'Water heater is tankless', false, 'Tankless heaters count at 100%.'),
   numField('dryer', 'Clothes dryer', 'kW', 5, 0, 15, 0.1),
-  numField('evse', 'EV charger', 'kW', 0, 0, 20, 0.1, 'Counted at 100% unless an energy management system limits it (Rule 8-106 11).'),
+  numField('evse', 'EV charger', 'kW', 0, 0, 20, 0.1, 'Enter the EV charging load. Confirm any permitted energy-management treatment against the electrical code adopted in your jurisdiction.'),
   numField('other', 'Other fixed loads over 1.5 kW each (total)', 'kW', 0, 0, 60, 0.1, 'Welders, pumps and similar fixed loads, counted with the dryer and water heater. Do not enter hot tubs, spas or pool heating here; use the field below.'),
   numField('spa', 'Hot tub, spa and pool heating loads (total)', 'kW', 0, 0, 60, 0.1, 'Counted at 100% of the rating, added to the calculated load.'),
 ];
@@ -55,7 +55,7 @@ export const dwellingLoad: Calculator = {
     if (p.n('heat') > 0 && p.n('ac') > 0 && !p.b('interlock')) warnings.push('Heating and air conditioning are both counted. Interlock them (or use a heat pump) to count only the larger.');
     if (service && service >= 200) warnings.push('For 200 A and above, check the utility meter-base and service-entrance requirements for your supplier.');
     if (p.b('tankless') && p.n('waterHeater') <= 0) warnings.push('Tankless selected with no water heater load.');
-    if (p.n('evse') > 0) warnings.push('The EV charger is counted at 100%. An approved energy management system may let you count less (Rule 8-106 11).');
+    if (p.n('evse') > 0) warnings.push('The EV charger is counted at 100% by this calculation. Confirm whether an approved energy-management system changes the applicable demand treatment in your jurisdiction.');
     const panel = service && service <= 100 ? 'PANEL-100A' : service && service <= 200 ? 'PANEL-200A' : undefined;
     const takeoff = compact([
       // The catalog loadcentres include their main breaker, so a separate main would be billed twice
@@ -66,7 +66,7 @@ export const dwellingLoad: Calculator = {
       summary: [
         { label: 'Minimum service', value: service ? `${service} A at 240 V` : 'Over 600 A', emphasis: true },
         { label: 'Calculated load', value: `${fmt(calcW, 0)} W (${fmt(amps, 1)} A)` },
-        { label: 'Living area (Rule 8-110)', value: `${fmt(living, 1)} m²` },
+        { label: 'Living area', value: `${fmt(living, 1)} m²` },
         { label: 'Basic load', value: `${fmt(basic, 0)} W` },
         { label: 'Heating and cooling', value: `${fmt(climate, 0)} W` },
         { label: 'Range, water heater, EV', value: `${fmt(rangeW + tankW + evW, 0)} W` },
@@ -78,8 +78,8 @@ export const dwellingLoad: Calculator = {
       takeoff,
       warnings,
       references: [
-        'CEC 2024 Rule 8-200 1) (single dwelling: basic load, heating, air conditioning, range, tankless water heater, EVSE, other loads over 1500 W) and the 8-200 1) b) minimum',
-        'CEC Rule 8-110 (living area from inside dimensions, basement at 75%), Rule 8-106 3) (interlocked loads), Section 62 heating demand',
+        'CEC Rule 8-200 provides the single-dwelling load-calculation context; confirm the applicable demand factors and minimums against the edition and amendments adopted in the project jurisdiction',
+        'Living area, interlocked loads and space-heating demand treatment must be confirmed against the electrical code edition and amendments adopted in the project jurisdiction',
         'Amperes = calculated watts / 240 V; service sizes rounded up to the next common size',
         AHJ_CHECK_LINE,
       ],

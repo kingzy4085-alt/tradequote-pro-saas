@@ -31,7 +31,7 @@ export const residentialWiringTakeoff: Calculator = {
     const p = readFields(input, fields, warnings);
     const area = p.n('area'), storeys = Math.round(p.n('storeys')), beds = Math.round(p.n('bedrooms')), baths = Math.round(p.n('bathrooms')), rooms = Math.round(p.n('rooms'));
     const general = beds + rooms;
-    // General-room receptacles: the 1.8 m rule (CEC Rule 26-712) means one receptacle per 3.6 m of usable wall, minimum two per room.
+    // General-room receptacles: estimate from the applicable dwelling-unit receptacle-spacing requirements; confirm against the adopted electrical code.
     const roomArea = general > 0 ? Math.max(area - 14 - 5 * baths, 0) * 0.88 / general : 0;
     const usableWall = Math.max(4 * Math.sqrt(roomArea) - 2, 3);
     const perRoom = general > 0 ? Math.max(2, ceil(usableWall / 3.6)) : 0;
@@ -78,10 +78,10 @@ export const residentialWiringTakeoff: Calculator = {
     const smokes = storeys + (p.b('basement') ? 1 : 0) + beds;
     const co = p.b('fuel') ? 1 + (p.b('basement') ? 1 : 0) : 0;
     if (beds === 0) warnings.push('No bedrooms entered; no bedroom circuits or alarms were counted.');
-    warnings.push('Counts are estimates from room counts and area. Receptacle numbers assume square rooms and the 1.8 m rule of CEC 26-712; a drawing-based takeoff will differ.');
+    warnings.push('Counts are estimates from room counts and area. Receptacle numbers use a simplified dwelling-unit spacing assumption; confirm the required spacing against the electrical code adopted in your jurisdiction. A drawing-based takeoff will differ.');
     warnings.push('The range, dryer and water heater circuits are not included; add them from the dwelling load calculator results.');
     if (p.b('ev')) warnings.push('An EV circuit was counted as one 2-pole breaker; size it with the EV charger calculator.');
-    warnings.push('Smoke alarms are counted per storey and in every bedroom; carbon monoxide alarms by sleeping area. Confirm with NBC 9.10.19 and 9.33.4 and your provincial amendments.');
+    warnings.push('Smoke alarms are counted per storey and in every bedroom; carbon monoxide alarms by sleeping area. The count assumes carbon monoxide alarms where a fuel-burning appliance is present, near the sleeping areas. Confirm the alarm requirements in the National Building Code and your provincial amendments.');
     const potLine = pots > 0 ? core('POT-4IN', pots) : null;
     const takeoff = compact([
       core('REC-15A-TR', rec15), core('REC-20A-TR', rec20), core('REC-GFCI', gfci), core('REC-WP-COVER', ext),
@@ -108,8 +108,8 @@ export const residentialWiringTakeoff: Calculator = {
       takeoff,
       warnings,
       references: [
-        'CEC 2024 Rule 26-712 (receptacle spacing in dwellings: no point along the floor line more than 1.8 m from a receptacle; counter spacing), Rule 26-700 (GFCI). AFCI scope varies by edition and province: confirm with the authority having jurisdiction',
-        'CEC Rule 8-304 (up to 12 outlets on a 15 A circuit); NBC 9.10.19 smoke alarms and 9.33.4 carbon monoxide alarms',
+        'CEC dwelling-unit receptacle-spacing, GFCI and AFCI requirements vary by edition, location and provincial amendments; confirm the applicable requirements with the authority having jurisdiction',
+        'Confirm circuit-loading and outlet requirements against the electrical code adopted in your jurisdiction; NBC smoke-alarm and carbon-monoxide-alarm requirements are described in words only',
         'Cable: 4.5 m per outlet plus a home run of 6 m, 4 m per extra storey and 0.3 x the square root of the area; 10% added for waste',
         AHJ_CHECK_LINE,
       ],

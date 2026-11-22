@@ -198,6 +198,20 @@ describe('the draft', () => {
     expect(client.log.every((l) => l.op === 'select')).toBe(true);
   });
 
+  it("uses the company's own labour hours from its price book, not only its price", async () => {
+    signedIn({ tables: { material_price_book: [{ company_id: COMPANY.id, item_code: ITEM.code, description: 'Our pot light', unit: ITEM.unit, unit_cost: 9.5, labour_hours: 0.85 }] } });
+    const body = await (await post()).json();
+    expect(body.lines[0]).toMatchObject({ code: ITEM.code, materialUnitCost: 9.5, labourHoursPerUnit: 0.85, priceSource: 'company' });
+    expect(body.estimateLines[0]).toMatchObject({ material_unit_cost: 9.5, labour_hours_per_unit: 0.85 });
+  });
+
+  it('skips a saved price that is not a usable number instead of pricing the line at zero', async () => {
+    signedIn({ tables: { material_price_book: [{ company_id: COMPANY.id, item_code: ITEM.code, description: 'Broken row', unit: ITEM.unit, unit_cost: 'not a price', labour_hours: 0.85 }] } });
+    const body = await (await post()).json();
+    expect(body.lines[0].priceSource).toBe('reference');
+    expect(body.lines[0].materialUnitCost).toBeGreaterThan(0);
+  });
+
   it('falls back to reference prices when the price book is unreadable', async () => {
     signedIn();
     const body = await (await post()).json();

@@ -62,7 +62,7 @@ export const concreteFootingWall: Calculator = {
       references: [
         'Volume = length x width x thickness for the footing and the wall, plus waste; ordered in 0.25 m³ steps',
         'Form area = both faces of the wall plus both sides of the footing; rebar masses 10M 0.785 kg/m, 15M 1.57 kg/m',
-        'NBC 2020 Part 9 Section 9.15 (footings and foundations) for sizing; confirm with the drawings',
+        'Applicable foundation requirements in the building code adopted in your jurisdiction; confirm with the project drawings and authority having jurisdiction',
       ],
     };
   },

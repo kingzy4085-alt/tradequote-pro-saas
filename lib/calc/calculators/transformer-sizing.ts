@@ -44,7 +44,7 @@ export const transformerSizing: Calculator = {
     const primaryStd = stdAtLeast(STD_OCPD, primaryMax);
     const secondaryMax = is * 1.25;
     const secondaryStd = stdAtLeast(STD_OCPD, secondaryMax);
-    warnings.push(`Primary-only protection: not above 125% of the primary current (${fmt(primaryMax, 1)} A), with the next standard size permitted where that does not match (Rule 14-104 and Table 13). Confirm the transformer protection rule and edition with the authority having jurisdiction.`);
+    warnings.push(`Primary-only protection calculation shown: ${fmt(primaryMax, 1)} A before selection of a standard device. Verify the permitted transformer overcurrent-protection limits and standard-device treatment in the electrical code edition adopted by your province and confirm with the authority having jurisdiction.`);
     warnings.push(`With secondary protection at up to 125% of the secondary current (${fmt(secondaryMax, 1)} A) the primary protection may be set higher. Read the transformer protection rule in your adopted CEC edition for the exact limits.`);
     if (three && (kva === 15 || kva === 45)) {
       if (!(three && vp === 600 && vs === 208)) warnings.push('The catalog transformers are 600-120/208 V three-phase. Check the price for your voltages.');
@@ -66,7 +66,7 @@ export const transformerSizing: Calculator = {
       warnings,
       references: [
         'kVA = V x I (single-phase) or 1.732 x V x I (three-phase) / 1000; standard distribution kVA ratings',
-        'CEC transformer overcurrent protection rules (confirm the rule numbers in the edition your province adopts), Rule 14-104 and Table 13 (standard ratings)',
+        'CEC transformer overcurrent-protection requirements, described in words only; verify the exact limits in the edition adopted by your province. Standard device ratings shown by the calculator are a short list of common sizes',
         AHJ_CHECK_LINE,
       ],
     };

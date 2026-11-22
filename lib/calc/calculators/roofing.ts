@@ -47,11 +47,11 @@ export const roofing: Calculator = {
     const vents = ceil(nfaNeeded / p.n('vent'));
     const tear = p.b('tearOff');
     const hauls = tear ? ceil((squares * p.n('layers')) / 25) : 0;
-    if (rise < 4) warnings.push('Pitches under 4/12 are low-slope: check the shingle manufacturer and NBC 9.26 (low-slope roofs need extra underlay or membrane).');
+    if (rise < 4) warnings.push('Pitches under 4/12 are low-slope: check the shingle manufacturer and the roofing requirements in the building code adopted in the project jurisdiction; additional underlay or membrane may be required.');
     if (rise > 9) warnings.push('Steep roofs over 9/12 need fall protection and more labour; the nail and waste allowances may need to rise.');
     if (p.n('waste') < 8) warnings.push('Under 8% waste is tight; cuts at valleys, hips and the rake waste more.');
     if (p.n('eave') <= 0) warnings.push('No eave length entered, so no ice and water shield, drip edge or starter was counted at the eaves.');
-    warnings.push(`Attic ventilation: ${fmt(nfaNeeded, 0)} sq in of net free vent area (1/300 of the ceiling area, NBC 9.19.1.2); split roughly half low (soffit) and half high.`);
+    warnings.push(`Attic ventilation estimate: ${fmt(nfaNeeded, 0)} sq in of net free vent area using a 1/300 estimating ratio; confirm the required ventilation ratio against the building code adopted in the project jurisdiction and split ventilation appropriately between low and high openings.`);
     if (tear && hauls > 0) warnings.push('Disposal assumes one 20 yd bin per 25 squares of one layer; heavy or multiple layers fill a bin sooner.');
     const takeoff = compact([
       core('SHINGLE-ARCH', bundles, { note: '3 bundles per square' }),
@@ -80,7 +80,7 @@ export const roofing: Calculator = {
       warnings,
       references: [
         'Roof area = footprint x sqrt(1 + (rise/12)²); 1 square = 100 sq ft; 3 bundles per square',
-        'NBC 2020 Section 9.26 (roofing; eave protection against ice damming) and 9.19.1.2 (roof space ventilation at 1/300)',
+        'Confirm roofing, eave-protection and roof-space-ventilation requirements against the building code adopted in the project jurisdiction',
         'Nails about 320 per square; drip edge, starter and cap quantities from the edge lengths entered',
       ],
     };

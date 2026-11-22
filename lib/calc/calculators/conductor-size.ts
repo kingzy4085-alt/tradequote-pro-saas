@@ -1,4 +1,4 @@
-import { AHJ_CHECK_LINE, awgLabel, compact, coreOrFree, fmt, numField, readFields, round, selField, boolField, stdAtLeast, values } from '../common';
+import { AHJ_CHECK_LINE, awgLabel, compact, coreOrFree, fmt, numField, readFields, round, selField, boolField, stdAtLeast, stdAtMost, terminationField, TERMINATION_WARNING, values } from '../common';
 import { SIZES, SMALL_CONDUCTOR_MAX, STD_OCPD, wireCode } from '../electrical-data';
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
@@ -10,7 +10,7 @@ const fields: CalcField[] = [
   numField('tableAmpacity', 'Conductor ampacity from the code book', 'A', 0, 0, 2000, 1, 'Read it from the code book ampacity table for your conductor material and installation, in the column for the conductor insulation temperature. Not supplied by this calculator. 0 means not entered yet.'),
   numField('ambientFactor', 'Ambient temperature correction factor', undefined, 1, 0, 1.5, 0.01, 'Read it from the code book ambient correction table for your insulation and ambient temperature. Use 1 at the table base temperature.'),
   numField('derating', 'Derating factor for more than three conductors', undefined, 1, 0, 1, 0.01, 'Read it from the code book table for the number of conductors in the raceway or cable. Use 1 for three or fewer.'),
-  selField('termination', 'Termination temperature rating', '60', [['60', '60 °C'], ['75', '75 °C'], ['90', '90 °C']], 'Defaults to 60 °C. Choose 75 °C only when the equipment is marked for 75 °C conductors. The conductor ampacity at this temperature limits the result.'),
+  terminationField(),
   numField('terminationAmpacity', 'Ampacity at the termination temperature (optional)', 'A', 0, 0, 2000, 1, 'The same code book table, read in the column for the termination temperature above. Leave at 0 if the ampacity typed above is already read at that column.'),
   selField('material', 'Conductor material for pricing', 'cu', [['cu', 'Copper'], ['al', 'Aluminum']]),
   selField('size', 'Conductor size for pricing (optional)', 'none', [['none', 'No takeoff'], ...SIZES.map((s) => [s, awgLabel(s)] as [string, string])], 'Only used to price the wire and for the small-conductor limit. It does not set any ampacity: the ampacity is the figure you typed from the code book.'),
@@ -42,22 +42,26 @@ export const conductorSize: Calculator = {
     const corrected = table * p.n('ambientFactor') * p.n('derating');
     const termAmp = p.n('terminationAmpacity');
     const termLimit = termAmp > 0 ? termAmp : null;
-    const usable = termLimit !== null ? Math.min(corrected, termLimit) : corrected;
-    const pass = entered && usable >= required - 1e-9;
-    const ocpd = stdAtLeast(STD_OCPD, required);
     const size = p.s('size');
     const hasSize = size !== 'none';
+    // Rule 14-104 caps overcurrent protection of small conductors, and so the ampacity the circuit can use
+    const smallLimit = hasSize ? (SMALL_CONDUCTOR_MAX[material][size] ?? null) : null;
+    const usable = termLimit !== null ? Math.min(corrected, termLimit) : corrected;
+    const effective = smallLimit !== null ? Math.min(usable, smallLimit) : usable;
+    const pass = entered && effective >= required - 1e-9;
+    const wanted = stdAtLeast(STD_OCPD, required);
+    const ocpd = wanted !== null && smallLimit !== null && wanted > smallLimit + 1e-9 ? stdAtMost(STD_OCPD, smallLimit) : wanted;
 
     if (!entered) warnings.push('Enter the conductor ampacity from your code book to get a pass or fail.');
     if (entered && p.n('ambientFactor') <= 0) warnings.push('An ambient factor of 0 leaves no ampacity; use insulation rated for the ambient temperature.');
-    if (entered && !pass) warnings.push(`The corrected ampacity of ${fmt(usable, 1)} A is below the ${fmt(required, 1)} A required. Use a larger conductor or reduce the load, then enter the new code book ampacity.`);
+    if (entered && !pass) warnings.push(`The usable ampacity of ${fmt(effective, 1)} A is below the ${fmt(required, 1)} A required. Use a larger conductor or reduce the load, then enter the new code book ampacity.`);
     if (entered && termLimit !== null && termLimit < corrected) warnings.push(`The ${term} °C termination limit of ${fmt(termLimit, 0)} A is below the corrected ampacity of ${fmt(corrected, 1)} A, so it governs.`);
-    if (entered && termLimit === null && term === 60) warnings.push('Read the ampacity from the 60 °C column unless the equipment is marked for 75 °C or higher conductors, or enter the ampacity at the termination temperature above.');
+    if (entered && termLimit === null && term === 60) warnings.push(`${TERMINATION_WARNING.replace('termination temperature.', 'termination temperature above.')}`);
     if (freeAir && p.n('derating') < 1) warnings.push('A derating factor was entered for free air; check that your code book applies it to single conductors in free air.');
-    if (entered && ocpd !== null && ocpd > usable + 1e-9) warnings.push(`The next standard device above the required ampacity is ${ocpd} A, larger than the ${fmt(usable, 0)} A corrected ampacity. Rule 14-104 allows rounding up only in the cases it lists; otherwise use the next lower rating.`);
+    if (entered && ocpd !== null && ocpd > effective + 1e-9) warnings.push(`The next standard device above the required ampacity is ${ocpd} A, larger than the ${fmt(effective, 0)} A usable ampacity. A higher standard overcurrent-device rating is permitted only where allowed by the electrical code adopted in your jurisdiction; otherwise select a compliant rating.`);
     if (hasSize) {
-      const cap = SMALL_CONDUCTOR_MAX[material][size];
-      if (cap) warnings.push(`${awgLabel(size)} ${material === 'cu' ? 'copper' : 'aluminum'} is limited to ${cap} A overcurrent protection (Rule 14-104).`);
+      const cap = smallLimit;
+      if (cap) warnings.push(`${awgLabel(size)} ${material === 'cu' ? 'copper' : 'aluminum'} is limited to ${cap} A overcurrent protection (Rule 14-104), so no more than ${cap} A is counted as usable and the overcurrent device is capped at ${cap} A.`);
       else if (material === 'al' && size === '14') warnings.push('Aluminum building wire is not made in 14 AWG; check the size.');
     }
 
@@ -70,11 +74,11 @@ export const conductorSize: Calculator = {
       summary: [
         { label: 'Result', value: !entered ? 'Enter the code book ampacity' : pass ? 'Pass' : 'Fail', emphasis: true },
         { label: 'Required ampacity', value: `${fmt(required, 1)} A${continuous ? ` (continuous load: ${fmt(load, 1)} A at ${round(contFactor * 100, 0)}% of ${freeAir ? 'free-air' : 'raceway or cable'} ampacity allowed)` : ''}` },
-        { label: 'Corrected available ampacity', value: entered ? `${fmt(usable, 1)} A` : 'n/a' },
+        { label: 'Corrected available ampacity', value: entered ? `${fmt(effective, 1)} A${effective < usable - 1e-9 ? ` (small-conductor limit of ${smallLimit} A applied)` : ''}` : 'n/a' },
         { label: 'Continuous factor used', value: `${contFactor}` },
         { label: 'Code book ampacity before correction', value: entered ? `${fmt(table, 1)} A x ambient ${p.n('ambientFactor')} x derating ${p.n('derating')} = ${fmt(corrected, 1)} A` : 'n/a' },
         { label: 'Termination limit', value: termLimit !== null ? `${fmt(termLimit, 0)} A at ${term} °C` : 'not entered' },
-        { label: 'Smallest standard overcurrent device', value: ocpd ? `${ocpd} A` : 'above 2000 A' },
+        { label: 'Smallest standard overcurrent device', value: ocpd ? `${ocpd} A${wanted !== null && ocpd < wanted ? ` (capped at the ${smallLimit} A small-conductor limit; the load needs ${wanted} A, so use a larger conductor)` : ''}` : 'above 2000 A' },
       ],
       values: values({
         passes: entered ? pass : null,
@@ -85,8 +89,9 @@ export const conductorSize: Calculator = {
         derating_factor: p.n('derating'),
         corrected_ampacity_a: entered ? round(corrected, 1) : null,
         termination_ampacity_a: termLimit,
-        usable_ampacity_a: entered ? round(usable, 1) : null,
-        margin_a: entered ? round(usable - required, 1) : null,
+        usable_ampacity_a: entered ? round(effective, 1) : null,
+        small_conductor_limit_a: smallLimit,
+        margin_a: entered ? round(effective - required, 1) : null,
         ocpd_a: ocpd,
         size: hasSize ? size : null,
       }),

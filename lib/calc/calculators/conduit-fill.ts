@@ -3,8 +3,8 @@ import { CONDUIT_METRIC, CONDUIT_SIZES, EMT_CODE_SIZES, PVC_CODE_SIZES, SIZES, f
 import type { CalcField, CalcInput, CalcResult, Calculator } from '../types';
 
 const fields: CalcField[] = [
-  numField('conductorOd', 'Conductor outside diameter', 'mm', 4.5, 1, 60, 0.05, 'Overall diameter of one insulated conductor, from the cable or wire datasheet. Not supplied by this calculator.'),
-  numField('conduitId', 'Conduit internal diameter', 'mm', 16, 5, 200, 0.1, 'Internal diameter of the conduit you will use, from the conduit spec sheet or the manufacturer.'),
+  numField('conductorOd', 'Conductor outside diameter', 'mm', 0, 0, 60, 0.05, 'Overall diameter of one insulated conductor, from the cable or wire datasheet. Not supplied by this calculator. 0 means not entered yet.'),
+  numField('conduitId', 'Conduit internal diameter', 'mm', 0, 0, 200, 0.1, 'Internal diameter of the conduit you will use, from the conduit spec sheet or the manufacturer. 0 means not entered yet.'),
   numField('count', 'Number of conductors', undefined, 4, 0, 200, 1, 'Count every conductor that goes in the conduit, bonding conductors included. This sets the fill limit: 53% for one, 31% for two, 40% for three or more.'),
   selField('conduit', 'Conduit type for pricing', 'emt', [['emt', 'EMT'], ['pvc', 'Rigid PVC']]),
   selField('tradeSize', 'Trade size for pricing', '1/2', CONDUIT_SIZES.map((s) => [s, `${s} in (${CONDUIT_METRIC[s]} mm)`] as [string, string]), 'The size you will buy. It is not checked against the diameter above, so enter the internal diameter of this size.'),
@@ -33,16 +33,18 @@ export const conduitFill: Calculator = {
     const limit = fillLimitPct(n);
     const allowed = (conduitArea * limit) / 100;
     const fillPct = conduitArea > 0 ? (total / conduitArea) * 100 : 0;
-    const pass = n > 0 && total <= allowed + 1e-9;
+    const entered = od > 0 && id > 0;
+    const pass = entered && n > 0 && total <= allowed + 1e-9;
     // Smallest internal diameter that holds n conductors: n x area = limit% x conduit area, so ID = OD x sqrt(n / limit).
     const minId = n > 0 ? od * Math.sqrt(n / (limit / 100)) : 0;
     // Most conductors of this size the conduit takes, each count judged against its own limit.
     let maxCount = 0;
     for (let k = 1; k <= 200; k++) if (k * oneArea <= (conduitArea * fillLimitPct(k)) / 100 + 1e-9) maxCount = k;
     if (n === 0) warnings.push('Enter at least one conductor.');
-    if (n > 0 && !pass) warnings.push(`Fill is ${fmt(fillPct, 1)}% of the conduit area, over the ${limit}% limit. You need an internal diameter of at least ${fmt(minId, 1)} mm, or fewer conductors.`);
-    if (pass && fillPct > 35) warnings.push(`Fill is ${fmt(fillPct, 0)}% of the area. On long runs or with several bends consider the next size for pulling.`);
-    if (n > 0) warnings.push('The result depends on the diameters you typed. Use the datasheet outside diameter of the actual conductor or cable, and the actual conduit internal diameter.');
+    if (!entered) warnings.push(`No pass or fail is shown yet. Enter the ${od <= 0 ? 'conductor outside diameter' : ''}${od <= 0 && id <= 0 ? ' and the ' : ''}${id <= 0 ? 'conduit internal diameter' : ''} from the datasheets.`);
+    if (entered && n > 0 && !pass) warnings.push(`Fill is ${fmt(fillPct, 1)}% of the conduit area, over the ${limit}% limit. You need an internal diameter of at least ${fmt(minId, 1)} mm, or fewer conductors.`);
+    if (entered && pass && fillPct > 35) warnings.push(`Fill is ${fmt(fillPct, 0)}% of the area. On long runs or with several bends consider the next size for pulling.`);
+    if (entered && n > 0) warnings.push('The result depends on the diameters you typed. Use the datasheet outside diameter of the actual conductor or cable, and the actual conduit internal diameter.');
     const size = p.s('tradeSize');
     const len = p.n('length');
     const runs = Math.round(p.n('runs'));
@@ -60,15 +62,15 @@ export const conduitFill: Calculator = {
     ]);
     return {
       summary: [
-        { label: 'Result', value: n === 0 ? 'No conductors' : pass ? 'Pass' : 'Fail', emphasis: true },
-        { label: 'Fill', value: `${fmt(fillPct, 1)}% of the area (limit ${limit}%)` },
-        { label: 'Conductor area', value: `${fmt(total, 1)} mm² for ${n} conductors` },
-        { label: 'Allowed area in this conduit', value: `${fmt(allowed, 0)} mm²` },
-        { label: 'Smallest internal diameter for these conductors', value: n > 0 ? `${fmt(minId, 1)} mm` : 'n/a' },
-        { label: 'Most conductors of this size that fit', value: `${maxCount}` },
+        { label: 'Result', value: n === 0 ? 'No conductors' : !entered ? 'Enter the diameters' : pass ? 'Pass' : 'Fail', emphasis: true },
+        { label: 'Fill', value: entered ? `${fmt(fillPct, 1)}% of the area (limit ${limit}%)` : `not worked out (limit ${limit}%)` },
+        { label: 'Conductor area', value: od > 0 ? `${fmt(total, 1)} mm² for ${n} conductors` : 'n/a' },
+        { label: 'Allowed area in this conduit', value: id > 0 ? `${fmt(allowed, 0)} mm²` : 'n/a' },
+        { label: 'Smallest internal diameter for these conductors', value: n > 0 && od > 0 ? `${fmt(minId, 1)} mm` : 'n/a' },
+        { label: 'Most conductors of this size that fit', value: entered ? `${maxCount}` : 'n/a' },
         { label: 'Couplings and connectors', value: `${couplings} couplings, ${connectors} connectors` },
       ],
-      values: values({ passes: n > 0 ? pass : null, fill_pct: round(fillPct, 2), limit_pct: limit, conductor_area_mm2: round(total, 2), conduit_area_mm2: round(conduitArea, 1), allowed_area_mm2: round(allowed, 1), min_conduit_id_mm: round(minId, 2), max_conductors: maxCount, trade_size: size, conductors: n, conduit_m: round(len * runs, 1), couplings, connectors }),
+      values: values({ passes: entered && n > 0 ? pass : null, fill_pct: entered ? round(fillPct, 2) : null, limit_pct: limit, conductor_area_mm2: od > 0 ? round(total, 2) : null, conduit_area_mm2: id > 0 ? round(conduitArea, 1) : null, allowed_area_mm2: id > 0 ? round(allowed, 1) : null, min_conduit_id_mm: od > 0 && n > 0 ? round(minId, 2) : null, max_conductors: entered ? maxCount : null, trade_size: size, conductors: n, conduit_m: round(len * runs, 1), couplings, connectors }),
       takeoff,
       warnings,
       references: [
