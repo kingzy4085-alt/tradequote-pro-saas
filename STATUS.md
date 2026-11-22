@@ -18,7 +18,7 @@ Last updated 2026-11-11. Written so that you, another developer, or another AI t
 | Check | Result |
 | --- | --- |
 | `npm run typecheck` | clean |
-| `npm test` (unit tests, plus database security tests on embedded Postgres) | 1,893 pass, 0 fail |
+| `npm test` (unit tests, plus database security tests on embedded Postgres) | 2,161 pass, 0 fail (49 test files) |
 | `npm run build` | passes |
 | `npm run e2e:local` (real sign-ins, HTTP and database on a local Supabase) | 247 pass, 0 fail |
 | New pages opened in a browser | see "Browser check" at the bottom |

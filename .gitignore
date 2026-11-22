@@ -53,3 +53,8 @@ supabase/.temp/
 
 # Worktrees made for AI coding agents
 /.claude/worktrees/
+
+# Local sensitive artefacts: lead lists hold personal email addresses, fix-pw.js is a one-off credential script
+/contractor_leads*.csv
+/fix-pw.js
+/vitest-fail.txt
