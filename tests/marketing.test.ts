@@ -83,6 +83,20 @@ describe('the quote builder and demo use the real engine', () => {
     for (const t of JOB_TEMPLATES) for (const part of t.parts) for (const l of part.lines) expect(CORE_ITEMS[l.code], `${t.id} ${l.code}`).toBeDefined();
   });
 
+  it('a template that names a calculator drives a real field of it, and the calculator sizes that part', () => {
+    for (const t of JOB_TEMPLATES) {
+      for (const part of t.parts) {
+        if (!part.calc) continue;
+        const calc = CALCULATORS.find((c) => c.id === part.calc!.id);
+        expect(calc, `${t.id}: ${part.calc.id}`).toBeDefined();
+        expect(calc!.fields.map((f) => f.key), `${t.id}: ${part.calc.id} has no field ${part.calc.scaleKey}`).toContain(part.calc.scaleKey);
+        // Otherwise the template quietly falls back to its typical lines
+        const sized = buildQuote({ templateId: t.id, region: t.defaultRegion, markupPct: t.defaultMarkup }).parts.find((p) => p.label === part.label);
+        expect(sized?.calcName, `${t.id}: ${part.label}`).toBe(calc!.name);
+      }
+    }
+  });
+
   it.each(JOB_TEMPLATES.map((t) => [t.id, t] as const))('%s totals equal estimateTotals for the same lines', (_id, t) => {
     for (const region of REGIONS.slice(0, 4).map((r) => r.code)) {
       const q = buildQuote({ templateId: t.id, region, markupPct: 22 });

@@ -72,7 +72,6 @@ export const JOB_TEMPLATES: readonly JobTemplate[] = [
     parts: [
       {
         label: 'Charger circuit',
-        calc: { id: 'ev-charger-circuit', input: {}, scaleKey: 'run_length' },
         lines: [
           { code: 'EVSE-L2-48A', fixed: 1 },
           { code: 'BKR-2P-60A', fixed: 1 },
@@ -117,7 +116,6 @@ export const JOB_TEMPLATES: readonly JobTemplate[] = [
       },
       {
         label: 'Drywall',
-        calc: { id: 'drywall', input: {}, scaleKey: 'area' },
         lines: [
           { code: 'DRYWALL-1/2-4X8', per: 0.07 },
           { code: 'MUD-17L', per: 0.006 },
@@ -149,7 +147,6 @@ export const JOB_TEMPLATES: readonly JobTemplate[] = [
     parts: [
       {
         label: 'Lighting',
-        calc: { id: 'lighting-layout', input: {}, scaleKey: 'fixtures' },
         lines: [
           { code: 'POT-4IN', per: 1 },
           { code: 'NMD90-14-2', per: 4.5 },
