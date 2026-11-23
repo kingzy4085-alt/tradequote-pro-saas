@@ -5,9 +5,9 @@ import { alertHref, companyToday, lastCheckedLabel, moduleLabel, SEVERITY_LABEL,
 import { barPercent, loadRollup, statusTone, type JobCost } from '@/lib/job-cost';
 import { getPageContext, type AppContext } from '@/lib/context';
 import { alertCountsByModule, attentionOrder, checkIsStale, dashboardAccess, hoursLabel, isOverdueAlert, plural, summariseJobs, type DashboardFigures } from '@/lib/dashboard';
-import { FOLLOW_UP_DAYS, WIN_RATE_DAYS, daysAgo, followUpsDue, winRateSince, type WinRate } from '@/lib/followups';
+import { FOLLOW_UP_DAYS, WIN_RATE_DAYS, daysAgo, type WinRate } from '@/lib/followups';
 import { formatMoney, formatValue } from '@/lib/format';
-import { PIPELINE_STAGES, toCard, type PipelineKind } from '@/lib/pipeline';
+import { PIPELINE_STAGES, type PipelineKind } from '@/lib/pipeline';
 import { listViewFilter } from '@/lib/list-views';
 import { MODULE_GROUPS, MODULES, getModule } from '@/lib/modules';
 import { provinceTimeZone } from '@/lib/provinces';
@@ -77,24 +77,55 @@ const QUOTE_KINDS: PipelineKind[] = ['estimates', 'proposals'];
 const QUOTE_ROWS = 500;
 const stageStatus = (stage: string, kind: PipelineKind) => PIPELINE_STAGES.find((s) => s.key === stage)!.accepts[kind]!;
 
-/** Win rate over the last 90 days and how many sent quotes are due a chase. Null if either could not be read. */
+/** Production compatibility: legacy quote tables use created_at as the available age signal. */
 async function loadQuoteStats(ctx: AppContext, today: string): Promise<{ win: WinRate; followUps: number } | null> {
   if (!QUOTE_KINDS.every((kind) => hasRank(ctx.role, getModule(kind)!.read))) return null;
+
   const since = daysAgo(today, WIN_RATE_DAYS);
+  const followUpBefore = daysAgo(today, FOLLOW_UP_DAYS - 1);
+
   const results = await Promise.all(
     QUOTE_KINDS.flatMap((kind) => {
       const table = getModule(kind)!.table;
+
       return [
-        ctx.supabase.from(table).select('id, status, updated_at').in('status', [stageStatus('won', kind), stageStatus('lost', kind)]).gt('updated_at', since).limit(QUOTE_ROWS),
-        ctx.supabase.from(table).select('id, title, status, notes, updated_at').eq('status', stageStatus('sent', kind)).lt('updated_at', daysAgo(today, FOLLOW_UP_DAYS - 1)).limit(QUOTE_ROWS),
+        ctx.supabase
+          .from(table)
+          .select('id, status, created_at')
+          .in('status', [stageStatus('won', kind), stageStatus('lost', kind)])
+          .gt('created_at', since)
+          .limit(QUOTE_ROWS),
+
+        ctx.supabase
+          .from(table)
+          .select('id, status, created_at')
+          .eq('status', stageStatus('sent', kind))
+          .lt('created_at', followUpBefore)
+          .limit(QUOTE_ROWS),
       ];
     })
   );
+
   if (results.some((r) => r.error)) return null;
-  const cards = (i: number, kind: PipelineKind) => ((results[i].data ?? []) as unknown as Record<string, unknown>[]).map((row) => toCard(kind, row));
-  const decided = [...cards(0, 'estimates'), ...cards(2, 'proposals')];
-  const waiting = [...cards(1, 'estimates'), ...cards(3, 'proposals')];
-  return { win: winRateSince(decided, since), followUps: followUpsDue(waiting, today).length };
+
+  const rows = (i: number) =>
+    (results[i].data ?? []) as unknown as Record<string, unknown>[];
+
+  const decided = [
+    ...rows(0).map((r) => ({ kind: 'estimates' as const, status: String(r.status ?? '') })),
+    ...rows(2).map((r) => ({ kind: 'proposals' as const, status: String(r.status ?? '') })),
+  ];
+
+  const won = decided.filter((card) => card.status === stageStatus('won', card.kind)).length;
+
+  return {
+    win: {
+      won,
+      decided: decided.length,
+      rate: decided.length ? Math.round((won / decided.length) * 100) : null,
+    },
+    followUps: rows(1).length + rows(3).length,
+  };
 }
 
 const SEVERITY_CHIP = {
